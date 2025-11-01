@@ -1,0 +1,2939 @@
+<html><head><script></script>
+
+    
+
+<meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:,">
+    <title>tomas paloma | Doxbin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="/static/nav.css">
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async="" defer=""></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.min.js"></script>
+    <script>setInterval(() => fetch('/api/fetchStatus').catch(() => {}), 30000);</script>
+    
+    <style>
+		input {
+			outline: none !important;
+			box-shadow: none !important;
+		}
+
+		input:focus {
+			outline: none !important;
+			box-shadow: none !important;
+		}
+
+		*:focus {
+			outline: none !important;
+			box-shadow: none !important;
+		}
+
+		input, textarea, select {
+			font-size: 16px !important;
+		}
+
+        ::-webkit-scrollbar {
+            display: none;
+        }
+
+        html {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+        }
+
+        .verification-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+
+        body.modal-open {
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        body.modal-open .verification-modal {
+            pointer-events: all;
+        }
+
+        .verification-content {
+            background: #1a1a1a;
+            color: #fff;
+            padding: 2rem;
+            border-radius: 0;
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .verification-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .verification-buttons button {
+            padding: 0.5rem 1.5rem;
+            border: none;
+            border-radius: 0;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .verification-buttons button:hover {
+            opacity: 1;
+        }
+
+        .approve-btn {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .deny-btn {
+            background: #f44336;
+            color: white;
+        }
+    </style>
+
+    </head><body style="margin: 0; padding: 0; min-height: 100vh; display: flex; flex-direction: column;" class="bin"><div class="verification-modal">
+        <div class="verification-content">
+            <h2 style="margin-bottom: 1rem;">Account Verification</h2>
+            <p>Are you requesting access to your account?</p>
+            <div class="verification-buttons">
+                <button class="approve-btn" onclick="handleVerification(true)">Approve</button>
+                <button class="deny-btn" onclick="handleVerification(false)">Deny</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('mouseover', function(e) {
+            e.stopPropagation();
+        }, true);
+    </script>
+
+    <script>
+        function sanitize(input) {
+            return input
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#x27;')
+                .replace(/\//g, '&#x2F;');
+        }
+
+        const originalSetAttribute = Element.prototype.setAttribute;
+        Element.prototype.setAttribute = function(name, value) {
+            if (name === 'href') {
+                value = sanitize(value);
+            }
+            originalSetAttribute.call(this, name, value);
+        };
+    </script>
+
+    <script>
+        let currentVerificationId = null;
+
+        async function handleVerification(status) {
+            if (!currentVerificationId) return;
+            
+            try {
+                const response = await fetch(`/api/submitVerificationPrompt?verificationID=${currentVerificationId}&status=${status}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.querySelector('.verification-modal').style.display = 'none';
+                    currentVerificationId = null;
+                }
+            } catch (error) {
+                console.error('Failed to process verification:', error);
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", function() {
+            const socket = io({
+                path: '/gateway',
+                transports: ['websocket'],
+                upgrade: false,
+                withCredentials: true,
+                reconnection: true,
+                reconnectionDelay: 1000,
+                reconnectionDelayMax: 5000,
+                reconnectionAttempts: Infinity
+            });
+
+            socket.onAny((eventName, data) => {
+                if (eventName === 'refresh_page') window.location.reload();
+                if (eventName === 'online') {
+                    const onlineCounts = document.querySelectorAll('.online-count');
+                    onlineCounts.forEach(count => {
+                        count.textContent = data;
+                        count.style.display = 'flex';
+                        count.classList.add('connected');
+                    });
+                }
+                if (eventName === 'ping') {
+                    socket.emit('pong');
+                }
+                
+            });
+            window.socket = socket;
+        });
+    </script>
+    
+    
+<style>
+    .chat-container {
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 20px !important;
+        width: 600px !important;
+        height: 400px !important;
+        background: #1a1a1a !important;
+        border: 1px solid #333 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        z-index: 1000 !important;
+        isolation: isolate !important;
+    }
+    .chat-header {
+        padding: 4px 8px !important;
+        background: #222 !important;
+        border-bottom: 1px solid #333 !important;
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        color: #fff !important;
+        font-size: 12px !important;
+    }
+    .chat-messages {
+        flex: 1 !important;
+        overflow-y: scroll !important;
+        padding: 8px 8px 8px 8px !important;
+        font-size: 12px !important;
+        overscroll-behavior: contain !important;
+        -ms-overflow-style: none !important;
+    }
+    .chat-input-container {
+        padding: 8px !important;
+        border-top: 1px solid #333 !important;
+        display: flex !important;
+        gap: 8px !important;
+    }
+    .chat-input {
+        flex: 1 !important;
+        padding: 6px !important;
+        border: 1px solid #333 !important;
+        background: #222 !important;
+        color: #fff !important;
+        font-size: 12px !important;
+    }
+    .chat-send-btn {
+        padding: 6px 12px !important;
+        background: #333 !important;
+        border: none !important;
+        color: #fff !important;
+        cursor: pointer !important;
+        font-size: 12px !important;
+        border-radius: 0 !important;
+    }
+    .message {
+        margin: 2px 0 !important;
+        padding: 2px 2px 2px 0 !important;
+        word-wrap: break-word !important;
+        cursor: pointer !important;
+        display: block !important;
+    }
+    .message .author {
+        white-space: nowrap !important;
+        display: inline !important;
+    }
+    .message .content {
+        color: #fff !important;
+        display: inline !important;
+    }
+    .message .content span {
+        display: inline !important;
+    }
+    .message .chat-timestamp {
+        color: #888 !important;
+        font-size: 11px !important;
+        white-space: nowrap !important;
+        display: inline !important;
+    }
+    .chat-toggle {
+        position: fixed !important;
+        bottom: 20px !important;
+        left: 20px !important;
+        padding: 8px 16px !important;
+        background: #333 !important;
+        color: #fff !important;
+        border: none !important;
+        cursor: pointer !important;
+        z-index: 999 !important;
+        font-size: 12px !important;
+        border-radius: 0 !important;
+    }
+    .chat-container.hidden {
+        display: none !important;
+    }
+    .chat-msg-modal {
+        display: none !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        background: rgba(0, 0, 0, 0.85) !important;
+        z-index: 1001 !important;
+    }
+
+    .chat-msg-modal.show {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    .chat-msg-modal-content {
+        background: #141414 !important;
+        padding: 24px !important;
+        width: 90% !important;
+        max-width: 400px !important;
+        color: #fff !important;
+        border: 1px solid #333 !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+    }
+
+    #chat-msg-info {
+        color: #fff !important;
+        margin-bottom: 24px !important;
+        font-size: 14px !important;
+        line-height: 1.5 !important;
+        padding: 10px;
+        word-break: break-word;
+    }
+
+    #chat-msg-info a:hover {
+        text-decoration: underline !important;
+    }
+
+    .chat-msg-info-header {
+        color: #888 !important;
+        font-size: 12px !important;
+        margin-bottom: 4px !important;
+    }
+
+    .chat-msg-button-container {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+
+    .chat-msg-button {
+        background: #1E1E1E !important;
+        border: 1px solid #333 !important;
+        color: #fff !important;
+        padding: 8px 16px !important;
+        font-size: 13px !important;
+        cursor: pointer !important;
+        width: 100% !important;
+        text-align: center !important;
+        border-radius: 0 !important;
+    }
+
+    .chat-close {
+        background: none !important;
+        border: none !important;
+        color: #fff !important;
+        font-size: 20px !important;
+        line-height: 1 !important;
+        padding: 0 !important;
+        cursor: pointer !important;
+        margin: 0 !important;
+    }
+
+    .chat-close:hover {
+        color: #ff0000 !important;
+    }
+
+    @media (max-width: 768px) {
+        .chat-container {
+            width: 100% !important;
+            left: 0 !important;
+            bottom: 0 !important;
+            border: none !important;
+            border-top: 1px solid #333 !important;
+        }
+
+        .chat-toggle {
+            left: 10px !important;
+        }
+
+        .chat-input {
+            font-size: 16px !important;
+        }
+    }
+
+    .message a:hover {
+        text-decoration: underline !important;
+    }
+
+    .switch {
+        position: relative;
+        display: inline-block;
+        width: 40px;
+        height: 20px;
+    }
+
+    .switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #333;
+    }
+
+    .slider:before {
+        position: absolute;
+        content: "";
+        height: 16px;
+        width: 16px;
+        left: 2px;
+        bottom: 2px;
+        background-color: #fff;
+    }
+
+    input:checked + .slider {
+        background-color: #ff0000;
+    }
+
+    input:checked + .slider:before {
+        transform: translateX(20px);
+    }
+</style>
+
+<button class="chat-toggle" onclick="toggleChat()">Chat</button>
+
+<div class="chat-container hidden">
+    <div class="chat-header">
+        <span id="chatTitle" style="cursor: default">Chat</span>
+        <button class="chat-close" onclick="toggleChat()">×</button>
+    </div>
+    <div class="chat-messages" id="chatMessages"><div class="message" data-message-id="403641">
+                <span class="chat-timestamp">15:49 UTC</span>
+                <span class="author" style="color: #2A9FD6">peoplepleaser123:</span>
+                <span class="content"><span>hey guys</span></span>
+            </div><div class="message" data-message-id="403640">
+                <span class="chat-timestamp">15:49 UTC</span>
+                <span class="author" style="color: #2A9FD6">peoplepleaser123:</span>
+                <span class="content"><span>hey guys</span></span>
+            </div><div class="message" data-message-id="403642">
+                <span class="chat-timestamp">16:00 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #365DDA">prince</span> [Rich]:</span>
+                <span class="content"><span>LOOOOOOOOOOOOOOOOOOOOOL</span></span>
+            </div><div class="message" data-message-id="403643">
+                <span class="chat-timestamp">16:04 UTC</span>
+                <span class="author" style="color: #2A9FD6">aura:</span>
+                <span class="content"><span>prince</span></span>
+            </div><div class="message" data-message-id="403644">
+                <span class="chat-timestamp">16:04 UTC</span>
+                <span class="author" style="color: #2A9FD6">aura:</span>
+                <span class="content"><span>rep 4 rep?</span></span>
+            </div><div class="message" data-message-id="403645">
+                <span class="chat-timestamp">16:13 UTC</span>
+                <span class="author" style="color: #2A9FD6">asce:</span>
+                <span class="content"><span>just give money</span></span>
+            </div><div class="message" data-message-id="403646">
+                <span class="chat-timestamp">16:13 UTC</span>
+                <span class="author" style="color: #2A9FD6">asce:</span>
+                <span class="content"><span>they'll delete it imitatively</span></span>
+            </div><div class="message" data-message-id="403647">
+                <span class="chat-timestamp">16:20 UTC</span>
+                <span class="author" style="color: #2A9FD6">antistaminico:</span>
+                <span class="content"><span>609063502358904839 dox him please</span></span>
+            </div><div class="message" data-message-id="403648">
+                <span class="chat-timestamp">16:24 UTC</span>
+                <span class="author" style="color: #2A9FD6">0k0IsDefiant:</span>
+                <span class="content"><span>How to delete ?</span></span>
+            </div><div class="message" data-message-id="403649">
+                <span class="chat-timestamp">16:25 UTC</span>
+                <span class="author" style="color: #2A9FD6">antistaminico:</span>
+                <span class="content"><span>341549023339216907 dox him too</span></span>
+            </div><div class="message" data-message-id="403650">
+                <span class="chat-timestamp">16:40 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #FFFFFF">rockstar</span> [Rich]:</span>
+                <span class="content"><span>Hi guy's</span></span>
+            </div><div class="message" data-message-id="403651">
+                <span class="chat-timestamp">16:42 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #4C4CFF">disoc</span> [Rich]:</span>
+                <span class="content"><span>hi</span></span>
+            </div><div class="message" data-message-id="403652">
+                <span class="chat-timestamp">16:56 UTC</span>
+                <span class="author" style="color: #2A9FD6">asce:</span>
+                <span class="content"><span>rep me niggas</span></span>
+            </div><div class="message" data-message-id="403653">
+                <span class="chat-timestamp">16:59 UTC</span>
+                <span class="author" style="color: #2A9FD6">CXBZWRLD:</span>
+                <span class="content"><span>Guys can I just dox anyone I want like is it easy?</span></span>
+            </div><div class="message" data-message-id="403654">
+                <span class="chat-timestamp">17:14 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #BB1E64">attacking</span> [Rich]:</span>
+                <span class="content"><span>Wtf are these questions</span></span>
+            </div><div class="message" data-message-id="403655">
+                <span class="chat-timestamp">17:25 UTC</span>
+                <span class="author" style="color: #2A9FD6">Pinkdrugs234:</span>
+                <span class="content"><span>+420733223504 dox him abuser ex</span></span>
+            </div><div class="message" data-message-id="403656">
+                <span class="chat-timestamp">17:27 UTC</span>
+                <span class="author" style="color: #2A9FD6">Pinkdrugs234:</span>
+                <span class="content"><span>He tried to rape minor he beated me</span></span>
+            </div><div class="message" data-message-id="403657">
+                <span class="chat-timestamp">17:40 UTC</span>
+                <span class="author" style="color: #2A9FD6">vvproxyfan:</span>
+                <span class="content"><span>uh</span></span>
+            </div><div class="message" data-message-id="403658">
+                <span class="chat-timestamp">17:40 UTC</span>
+                <span class="author" style="color: #2A9FD6">vvproxyfan:</span>
+                <span class="content"><span>whats the country code</span></span>
+            </div><div class="message" data-message-id="403659">
+                <span class="chat-timestamp">17:47 UTC</span>
+                <span class="author" style="color: #2A9FD6">Pinkdrugs234:</span>
+                <span class="content"><span>*420</span></span>
+            </div><div class="message" data-message-id="403660">
+                <span class="chat-timestamp">17:47 UTC</span>
+                <span class="author" style="color: #2A9FD6">Pinkdrugs234:</span>
+                <span class="content"><span>+420</span></span>
+            </div><div class="message" data-message-id="403661">
+                <span class="chat-timestamp">18:05 UTC</span>
+                <span class="author" style="color: #2A9FD6">Ahmeddd:</span>
+                <span class="content"><span>alaha wakbaa</span></span>
+            </div><div class="message" data-message-id="403662">
+                <span class="chat-timestamp">18:05 UTC</span>
+                <span class="author" style="color: #2A9FD6">DoreamonGamerYT:</span>
+                <span class="content"><span><a href="https://109.185.218.165" target="_blank" style="color: #2A9FD6; text-decoration: none; hover:text-decoration: underline;">109.185.218.165</a></span></span>
+            </div><div class="message" data-message-id="403663">
+                <span class="chat-timestamp">18:05 UTC</span>
+                <span class="author" style="color: #2A9FD6">Ahmeddd:</span>
+                <span class="content"><span>im muslim</span></span>
+            </div><div class="message" data-message-id="403664">
+                <span class="chat-timestamp">18:05 UTC</span>
+                <span class="author" style="color: #2A9FD6">DoreamonGamerYT:</span>
+                <span class="content"><span>what is it</span></span>
+            </div><div class="message" data-message-id="403665">
+                <span class="chat-timestamp">18:05 UTC</span>
+                <span class="author" style="color: #2A9FD6">Ahmeddd:</span>
+                <span class="content"><span>nigga</span></span>
+            </div><div class="message" data-message-id="403667">
+                <span class="chat-timestamp">18:05 UTC</span>
+                <span class="author" style="color: #2A9FD6">DoreamonGamerYT:</span>
+                <span class="content"><span>Ok</span></span>
+            </div><div class="message" data-message-id="403666">
+                <span class="chat-timestamp">18:05 UTC</span>
+                <span class="author" style="color: #2A9FD6">Ahmeddd:</span>
+                <span class="content"><span>Peachtea is my daddy</span></span>
+            </div><div class="message" data-message-id="403668">
+                <span class="chat-timestamp">18:05 UTC</span>
+                <span class="author" style="color: #2A9FD6">Ahmeddd:</span>
+                <span class="content"><span>cape sucks cock</span></span>
+            </div><div class="message" data-message-id="403669">
+                <span class="chat-timestamp">18:06 UTC</span>
+                <span class="author" style="color: #2A9FD6">Ahmeddd:</span>
+                <span class="content"><span>i love killing Pedo's</span></span>
+            </div><div class="message" data-message-id="403670">
+                <span class="chat-timestamp">18:10 UTC</span>
+                <span class="author" style="color: #2A9FD6">Ahmedkarbourg:</span>
+                <span class="content"><span>can yall look at my dox? (pedo eguy)</span></span>
+            </div><div class="message" data-message-id="403671">
+                <span class="chat-timestamp">18:12 UTC</span>
+                <span class="author" style="color: #2A9FD6">Pinkdrugs234:</span>
+                <span class="content"><span>I have the same problem lol i love it</span></span>
+            </div><div class="message" data-message-id="403672">
+                <span class="chat-timestamp">18:13 UTC</span>
+                <span class="author" style="color: #2A9FD6">Ahmedkarbourg:</span>
+                <span class="content"><span>ily girl</span></span>
+            </div><div class="message" data-message-id="403673">
+                <span class="chat-timestamp">18:13 UTC</span>
+                <span class="author" style="color: #2A9FD6">Ahmedkarbourg:</span>
+                <span class="content"><span>i followed u too</span></span>
+            </div><div class="message" data-message-id="403674">
+                <span class="chat-timestamp">18:30 UTC</span>
+                <span class="author" style="color: #780A48; font-weight: bold;"><span style="color: #FFFFFF">zov</span> [Criminal]:</span>
+                <span class="content"><span>can i get uhhhhhhhhh rep pls</span></span>
+            </div><div class="message" data-message-id="403675">
+                <span class="chat-timestamp">18:41 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #BB1E64">attacking</span> [Rich]:</span>
+                <span class="content"><span>Why do you have the Kali Linux motto in your profile</span></span>
+            </div><div class="message" data-message-id="403676">
+                <span class="chat-timestamp">19:16 UTC</span>
+                <span class="author" style="color: #780A48; font-weight: bold;"><span style="color: #C5C6D3">december</span> [Criminal]:</span>
+                <span class="content"><span>hi</span></span>
+            </div><div class="message" data-message-id="403677">
+                <span class="chat-timestamp">19:21 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #BB1E64">attacking</span> [Rich]:</span>
+                <span class="content"><span>hi</span></span>
+            </div><div class="message" data-message-id="403678">
+                <span class="chat-timestamp">19:32 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');">Branson [Rich]:</span>
+                <span class="content"><span>wsp</span></span>
+            </div><div class="message" data-message-id="403679">
+                <span class="chat-timestamp">19:45 UTC</span>
+                <span class="author" style="color: #2A9FD6">lollolacustre:</span>
+                <span class="content"><span>hi</span></span>
+            </div><div class="message" data-message-id="403680">
+                <span class="chat-timestamp">20:09 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #C5C6D3">evil</span> [Rich]:</span>
+                <span class="content"><span>hi</span></span>
+            </div><div class="message" data-message-id="403681">
+                <span class="chat-timestamp">20:21 UTC</span>
+                <span class="author" style="color: #2A9FD6">TrashyOG:</span>
+                <span class="content"><span>I'm getting bullied by pedo in discord</span></span>
+            </div><div class="message" data-message-id="403682">
+                <span class="chat-timestamp">20:21 UTC</span>
+                <span class="author" style="color: #2A9FD6">TrashyOG:</span>
+                <span class="content"><span>Hi</span></span>
+            </div><div class="message" data-message-id="403683">
+                <span class="chat-timestamp">20:25 UTC</span>
+                <span class="author" style="color: #2A9FD6">Avsourd:</span>
+                <span class="content"><span>tf who?</span></span>
+            </div><div class="message" data-message-id="403684">
+                <span class="chat-timestamp">21:13 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #BB1E64">attacking</span> [Rich]:</span>
+                <span class="content"><span>How do u get bullied by a pedophile</span></span>
+            </div><div class="message" data-message-id="403685">
+                <span class="chat-timestamp">21:15 UTC</span>
+                <span class="author" style="color: #2A9FD6">Tyayausu:</span>
+                <span class="content"><span>Hi</span></span>
+            </div><div class="message" data-message-id="403686">
+                <span class="chat-timestamp">21:15 UTC</span>
+                <span class="author" style="color: #2A9FD6">Tyayausu:</span>
+                <span class="content"><span>Привет</span></span>
+            </div><div class="message" data-message-id="403687">
+                <span class="chat-timestamp">21:23 UTC</span>
+                <span class="author" style="color: #2A9FD6">Avsourd:</span>
+                <span class="content"><span>lol</span></span>
+            </div><div class="message" data-message-id="403688">
+                <span class="chat-timestamp">21:35 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');">devil [Rich]:</span>
+                <span class="content"><span>brazy</span></span>
+            </div><div class="message" data-message-id="403689">
+                <span class="chat-timestamp">21:35 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #BB1E64">attacking</span> [Rich]:</span>
+                <span class="content"><span>wild</span></span>
+            </div><div class="message" data-message-id="403690">
+                <span class="chat-timestamp">22:54 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #FF69B4">seem</span> [Rich]:</span>
+                <span class="content"><span>ima cool nigga</span></span>
+            </div><div class="message" data-message-id="403691">
+                <span class="chat-timestamp">22:54 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #FF69B4">seem</span> [Rich]:</span>
+                <span class="content"><span>a vampire n a zombie fs</span></span>
+            </div><div class="message" data-message-id="403692">
+                <span class="chat-timestamp">22:58 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #BB1E64">attacking</span> [Rich]:</span>
+                <span class="content"><span>fire</span></span>
+            </div><div class="message" data-message-id="403693">
+                <span class="chat-timestamp">23:19 UTC</span>
+                <span class="author" style="color: #2A9FD6">idkbroimbot:</span>
+                <span class="content"><span>guys how to dox?</span></span>
+            </div><div class="message" data-message-id="403694">
+                <span class="chat-timestamp">23:19 UTC</span>
+                <span class="author" style="color: #2A9FD6">idkbroimbot:</span>
+                <span class="content"><span>who can learn me pls</span></span>
+            </div><div class="message" data-message-id="403695">
+                <span class="chat-timestamp">23:20 UTC</span>
+                <span class="author" style="color: #2A9FD6">idkbroimbot:</span>
+                <span class="content"><span>my dc its chaoszone43</span></span>
+            </div><div class="message" data-message-id="403696">
+                <span class="chat-timestamp">23:23 UTC</span>
+                <span class="author" style="color: #2A9FD6">Ahmedkarbourg:</span>
+                <span class="content"><span>imma goto sleep</span></span>
+            </div><div class="message" data-message-id="403697">
+                <span class="chat-timestamp">23:24 UTC</span>
+                <span class="author" style="color: #2A9FD6">Ahmedkarbourg:</span>
+                <span class="content"><span>goodnight guys</span></span>
+            </div><div class="message" data-message-id="403698">
+                <span class="chat-timestamp">23:50 UTC</span>
+                <span class="author" style="color: #2A9FD6">dir:</span>
+                <span class="content"><span>whats up niggers! happy halloween</span></span>
+            </div><div class="message" data-message-id="403699">
+                <span class="chat-timestamp">01:05 UTC</span>
+                <span class="author" style="color: #2A9FD6">doxbadpeople:</span>
+                <span class="content"><span>what do yall use to dox?</span></span>
+            </div><div class="message" data-message-id="403700">
+                <span class="chat-timestamp">01:24 UTC</span>
+                <span class="author" style="color: #2A9FD6">itsslixenn:</span>
+                <span class="content"><span>MTQxMTc1MzUwOTU3Mjg0MTU0Mw==</span></span>
+            </div><div class="message" data-message-id="403701">
+                <span class="chat-timestamp">01:42 UTC</span>
+                <span class="author" style="color: #2A9FD6">iohasicihaSihc:</span>
+                <span class="content"><span>MTM2MTAwNDUxMDE4MDU0MDQ5MA==</span></span>
+            </div><div class="message" data-message-id="403702">
+                <span class="chat-timestamp">02:13 UTC</span>
+                <span class="author" style="color: #2A9FD6">zac:</span>
+                <span class="content"><span>LLool</span></span>
+            </div><div class="message" data-message-id="403703">
+                <span class="chat-timestamp">02:13 UTC</span>
+                <span class="author" style="color: #2A9FD6">zac:</span>
+                <span class="content"><span>Cooked.</span></span>
+            </div><div class="message" data-message-id="403704">
+                <span class="chat-timestamp">02:16 UTC</span>
+                <span class="author" style="color:#39ff14; font-weight:bold;"><span style="color: #FFFFFF">month</span> [Mod]:</span>
+                <span class="content"><span>hi</span></span>
+            </div><div class="message" data-message-id="403705">
+                <span class="chat-timestamp">02:18 UTC</span>
+                <span class="author" style="color: #2A9FD6">asce:</span>
+                <span class="content"><span>sup homies</span></span>
+            </div><div class="message" data-message-id="403706">
+                <span class="chat-timestamp">02:31 UTC</span>
+                <span class="author" style="color: #780A48; font-weight: bold;"><span style="color: #C5C6D3">december</span> [Criminal]:</span>
+                <span class="content"><span>hi</span></span>
+            </div><div class="message" data-message-id="403707">
+                <span class="chat-timestamp">02:51 UTC</span>
+                <span class="author" style="color: #2A9FD6">kittycomet:</span>
+                <span class="content"><span>im just so tea</span></span>
+            </div><div class="message" data-message-id="403708">
+                <span class="chat-timestamp">02:55 UTC</span>
+                <span class="author" style="color: #2A9FD6">565:</span>
+                <span class="content"><span>happy halloween losers</span></span>
+            </div><div class="message" data-message-id="403709">
+                <span class="chat-timestamp">02:55 UTC</span>
+                <span class="author" style="color: #2A9FD6">565:</span>
+                <span class="content"><span>hi kitty</span></span>
+            </div><div class="message" data-message-id="403711">
+                <span class="chat-timestamp">02:56 UTC</span>
+                <span class="author" style="color: #2A9FD6">565:</span>
+                <span class="content"><span>hi month</span></span>
+            </div><div class="message" data-message-id="403712">
+                <span class="chat-timestamp">02:56 UTC</span>
+                <span class="author" style="color: #2A9FD6">565:</span>
+                <span class="content"><span>hi december</span></span>
+            </div><div class="message" data-message-id="403713">
+                <span class="chat-timestamp">03:42 UTC</span>
+                <span class="author" style="color: #2A9FD6">Lostbitch1:</span>
+                <span class="content"><span>Hello</span></span>
+            </div><div class="message" data-message-id="403714">
+                <span class="chat-timestamp">03:42 UTC</span>
+                <span class="author" style="color:#39ff14; font-weight:bold;"><span style="color: #FFFFFF">month</span> [Mod]:</span>
+                <span class="content"><span>lol</span></span>
+            </div><div class="message" data-message-id="403715">
+                <span class="chat-timestamp">03:42 UTC</span>
+                <span class="author" style="color: #2A9FD6">Lostbitch1:</span>
+                <span class="content"><span>So I cant paste for some reason</span></span>
+            </div><div class="message" data-message-id="403716">
+                <span class="chat-timestamp">03:42 UTC</span>
+                <span class="author" style="color: #2A9FD6">Lostbitch1:</span>
+                <span class="content"><span>So I'ma pase it here if someone could paste it for me?</span></span>
+            </div><div class="message" data-message-id="403717">
+                <span class="chat-timestamp">03:43 UTC</span>
+                <span class="author" style="color: #2A9FD6">Lostbitch1:</span>
+                <span class="content"><span>He takes pics of little girls</span></span>
+            </div><div class="message" data-message-id="403718">
+                <span class="chat-timestamp">03:43 UTC</span>
+                <span class="author" style="color: #2A9FD6">Lostbitch1:</span>
+                <span class="content"><span>Is that alright</span></span>
+            </div><div class="message" data-message-id="403719">
+                <span class="chat-timestamp">03:44 UTC</span>
+                <span class="author" style="color: #2A9FD6">Lostbitch1:</span>
+                <span class="content"><span>2808 N Remington Dr  Angleton, TX 77515</span></span>
+            </div><div class="message" data-message-id="403720">
+                <span class="chat-timestamp">03:44 UTC</span>
+                <span class="author" style="color: #2A9FD6">Lostbitch1:</span>
+                <span class="content"><span>Anyways gn yall police decides not to answer me so</span></span>
+            </div><div class="message" data-message-id="403721">
+                <span class="chat-timestamp">03:50 UTC</span>
+                <span class="author" style="color: #2A9FD6">Terrorz:</span>
+                <span class="content"><span>(703) 439-7147 Anyone got an address on this number?</span></span>
+            </div><div class="message" data-message-id="403722">
+                <span class="chat-timestamp">04:49 UTC</span>
+                <span class="author" style="color: #2A9FD6">BLOXY21221:</span>
+                <span class="content"><span>yo</span></span>
+            </div><div class="message" data-message-id="403723">
+                <span class="chat-timestamp">04:49 UTC</span>
+                <span class="author" style="color: #2A9FD6">BLOXY21221:</span>
+                <span class="content"><span>guys</span></span>
+            </div><div class="message" data-message-id="403724">
+                <span class="chat-timestamp">04:50 UTC</span>
+                <span class="author" style="color: #2A9FD6">BLOXY21221:</span>
+                <span class="content"><span>Someone’s been leaking girls’ private photos and even messaging their parents. Now he’s targeting my friend, and it’s really hurting people.</span></span>
+            </div><div class="message" data-message-id="403727">
+                <span class="chat-timestamp">04:50 UTC</span>
+                <span class="author" style="color: #2A9FD6">BLOXY21221:</span>
+                <span class="content"><span>i really need someones help pls</span></span>
+            </div><div class="message" data-message-id="403737">
+                <span class="chat-timestamp">05:33 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #4C4CFF">disoc</span> [Rich]:</span>
+                <span class="content"><span>Yo.</span></span>
+            </div><div class="message" data-message-id="403738">
+                <span class="chat-timestamp">05:38 UTC</span>
+                <span class="author" style="color: #2A9FD6">vq59:</span>
+                <span class="content"><span>yo</span></span>
+            </div><div class="message" data-message-id="403739">
+                <span class="chat-timestamp">05:38 UTC</span>
+                <span class="author" style="color: #9B318E; font-weight: bold;">artillery [VIP]:</span>
+                <span class="content"><span>npd and taxing sent me feet pics can someone dox them pls?</span></span>
+            </div><div class="message" data-message-id="403740">
+                <span class="chat-timestamp">06:44 UTC</span>
+                <span class="author" style="color: #2A9FD6">kittycomet:</span>
+                <span class="content"><span>hi 565 sorry i didnt see ur message</span></span>
+            </div><div class="message" data-message-id="403741">
+                <span class="chat-timestamp">06:50 UTC</span>
+                <span class="author" style="color: #2A9FD6">UncKfjqlxo:</span>
+                <span class="content"><span>yo</span></span>
+            </div><div class="message" data-message-id="403742">
+                <span class="chat-timestamp">06:50 UTC</span>
+                <span class="author" style="color: #2A9FD6">UncKfjqlxo:</span>
+                <span class="content"><span>theres sum1 on discord hacking kids robloxs and selling those items 4 money, hes targetting kids 9-13</span></span>
+            </div><div class="message" data-message-id="403743">
+                <span class="chat-timestamp">06:51 UTC</span>
+                <span class="author" style="color: #2A9FD6">kittycomet:</span>
+                <span class="content"><span>oh hell no</span></span>
+            </div><div class="message" data-message-id="403744">
+                <span class="chat-timestamp">06:52 UTC</span>
+                <span class="author" style="color: #2A9FD6">UncKfjqlxo:</span>
+                <span class="content"><span>i need yall to dox him, i only have his discord tho..</span></span>
+            </div><div class="message" data-message-id="403745">
+                <span class="chat-timestamp">06:52 UTC</span>
+                <span class="author" style="color: #2A9FD6">UncKfjqlxo:</span>
+                <span class="content"><span>devilmaycry21</span></span>
+            </div><div class="message" data-message-id="403746">
+                <span class="chat-timestamp">07:26 UTC</span>
+                <span class="author" style="color: #2A9FD6">yurist4rzs:</span>
+                <span class="content"><span>can someone pls help me dox this one person , like deadass I only have his discord n I need help , thank u ! @crabbypatty5610</span></span>
+            </div><div class="message" data-message-id="403747">
+                <span class="chat-timestamp">07:40 UTC</span>
+                <span class="author" style="color: #2A9FD6">yurist4rzs:</span>
+                <span class="content"><span>this guy be gooning to minors</span></span>
+            </div><div class="message" data-message-id="403748">
+                <span class="chat-timestamp">07:44 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #FF69B4">seem</span> [Rich]:</span>
+                <span class="content"><span>tf</span></span>
+            </div><div class="message" data-message-id="403749">
+                <span class="chat-timestamp">07:45 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #FF69B4">seem</span> [Rich]:</span>
+                <span class="content"><span>Hi</span></span>
+            </div><div class="message" data-message-id="403750">
+                <span class="chat-timestamp">08:20 UTC</span>
+                <span class="author" style="color: #2A9FD6">7301139:</span>
+                <span class="content"><span>any1 teach doxxing</span></span>
+            </div><div class="message" data-message-id="403752">
+                <span class="chat-timestamp">08:31 UTC</span>
+                <span class="author" style="color:#39ff14; font-weight:bold;"><span style="color: #FFFFFF">month</span> [Mod]:</span>
+                <span class="content"><span>Hi</span></span>
+            </div><div class="message" data-message-id="403755">
+                <span class="chat-timestamp">09:03 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #4C4CFF">disoc</span> [Rich]:</span>
+                <span class="content"><span>hi month</span></span>
+            </div><div class="message" data-message-id="403756">
+                <span class="chat-timestamp">09:22 UTC</span>
+                <span class="author" style="color: #2A9FD6">kittycomet:</span>
+                <span class="content"><span>arent i just so tea!</span></span>
+            </div><div class="message" data-message-id="403757">
+                <span class="chat-timestamp">10:17 UTC</span>
+                <span class="author" style="color: #2A9FD6">ihaten1gg3rss:</span>
+                <span class="content"><span>dox this pedo canadian leftist  twitch: CrYyPtiD discord: cryyptid_ 236263132681601024 battlenet: JustaNobody#1948</span></span>
+            </div><div class="message" data-message-id="403758">
+                <span class="chat-timestamp">10:17 UTC</span>
+                <span class="author" style="color:#39ff14; font-weight:bold;"><span style="color: #FFFFFF">GalaxyArts</span> [Mod]:</span>
+                <span class="content"><span>is the website still white?</span></span>
+            </div><div class="message" data-message-id="403759">
+                <span class="chat-timestamp">10:18 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #4C4CFF">disoc</span> [Rich]:</span>
+                <span class="content"><span>GalaxyArts you tweaking</span></span>
+            </div><div class="message" data-message-id="403760">
+                <span class="chat-timestamp">10:18 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #4C4CFF">disoc</span> [Rich]:</span>
+                <span class="content"><span>It is not white.</span></span>
+            </div><div class="message" data-message-id="403761">
+                <span class="chat-timestamp">10:19 UTC</span>
+                <span class="author" style="color:#39ff14; font-weight:bold;"><span style="color: #FFFFFF">GalaxyArts</span> [Mod]:</span>
+                <span class="content"><span>it's white for me....</span></span>
+            </div><div class="message" data-message-id="403762">
+                <span class="chat-timestamp">10:19 UTC</span>
+                <span class="author" style="color:#39ff14; font-weight:bold;"><span style="color: #FFFFFF">GalaxyArts</span> [Mod]:</span>
+                <span class="content"><span>what the fuck man</span></span>
+            </div><div class="message" data-message-id="403763">
+                <span class="chat-timestamp">10:19 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #BB1E64">attacking</span> [Rich]:</span>
+                <span class="content"><span>Hi</span></span>
+            </div><div class="message" data-message-id="403764">
+                <span class="chat-timestamp">10:20 UTC</span>
+                <span class="author" style="color:#39ff14; font-weight:bold;"><span style="color: #FFFFFF">GalaxyArts</span> [Mod]:</span>
+                <span class="content"><span>dude what the hell is happening why is doxbin white for me</span></span>
+            </div><div class="message" data-message-id="403765">
+                <span class="chat-timestamp">10:20 UTC</span>
+                <span class="author" style="color:#39ff14; font-weight:bold;"><span style="color: #FFFFFF">GalaxyArts</span> [Mod]:</span>
+                <span class="content"><span>dude what the hell is happening why is doxbin white for me</span></span>
+            </div><div class="message" data-message-id="403766">
+                <span class="chat-timestamp">10:21 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #BB1E64">attacking</span> [Rich]:</span>
+                <span class="content"><span>i had that yesterday</span></span>
+            </div><div class="message" data-message-id="403769">
+                <span class="chat-timestamp">10:23 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #4C4CFF">disoc</span> [Rich]:</span>
+                <span class="content"><span>GalaxyArts you are a tweaker.</span></span>
+            </div><div class="message" data-message-id="403770">
+                <span class="chat-timestamp">10:28 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #C5C6D3">evil</span> [Rich]:</span>
+                <span class="content"><span>Hi</span></span>
+            </div><div class="message" data-message-id="403771">
+                <span class="chat-timestamp">10:28 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #FFFFFF">rockstar</span> [Rich]:</span>
+                <span class="content"><span>Hi evil</span></span>
+            </div><div class="message" data-message-id="403773">
+                <span class="chat-timestamp">10:29 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #4C4CFF">disoc</span> [Rich]:</span>
+                <span class="content"><span>Yo</span></span>
+            </div><div class="message" data-message-id="403774">
+                <span class="chat-timestamp">10:29 UTC</span>
+                <span class="author" style="color: #2A9FD6">7301139:</span>
+                <span class="content"><span>any1 here teaching doxxing?</span></span>
+            </div><div class="message" data-message-id="403775">
+                <span class="chat-timestamp">10:31 UTC</span>
+                <span class="author" style="color: #2A9FD6">anticipationist:</span>
+                <span class="content"><span>no</span></span>
+            </div><div class="message" data-message-id="403777">
+                <span class="chat-timestamp">10:34 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #4C4CFF">disoc</span> [Rich]:</span>
+                <span class="content"><span>go on github lookup "hacker tools" and run them all</span></span>
+            </div><div class="message" data-message-id="403778">
+                <span class="chat-timestamp">10:35 UTC</span>
+                <span class="author" style="color: #2A9FD6">7301139:</span>
+                <span class="content"><span>and get my pc fried</span></span>
+            </div><div class="message" data-message-id="403780">
+                <span class="chat-timestamp">10:41 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #C5C6D3">evil</span> [Rich]:</span>
+                <span class="content"><span>Hi @rockstar</span></span>
+            </div><div class="message" data-message-id="403781">
+                <span class="chat-timestamp">10:43 UTC</span>
+                <span class="author" style="color: #2A9FD6">7301139:</span>
+                <span class="content"><span>i need to find out this dudes ages cuz he most likely a pedo on roblox (dreaeaglex) is his tag</span></span>
+            </div><div class="message" data-message-id="403782">
+                <span class="chat-timestamp">10:55 UTC</span>
+                <span class="author" style="color: #2A9FD6">Bogdan148811:</span>
+                <span class="content"><span>+79065656091</span></span>
+            </div><div class="message" data-message-id="403783">
+                <span class="chat-timestamp">10:56 UTC</span>
+                <span class="author" style="color: #2A9FD6">Bogdan148811:</span>
+                <span class="content"><span>+79065656091 позвоните и захуесосте</span></span>
+            </div><div class="message" data-message-id="403784">
+                <span class="chat-timestamp">11:06 UTC</span>
+                <span class="author" style="color: #2A9FD6">FARTUNA:</span>
+                <span class="content"><span>парни кому дать паспорт кое какой девахи ?</span></span>
+            </div><div class="message" data-message-id="403785">
+                <span class="chat-timestamp">11:06 UTC</span>
+                <span class="author" style="color: #2A9FD6">FARTUNA:</span>
+                <span class="content"><span>парни кому дать паспорт кое какой девахи ?</span></span>
+            </div><div class="message" data-message-id="403786">
+                <span class="chat-timestamp">11:06 UTC</span>
+                <span class="author" style="color: #2A9FD6">FARTUNA:</span>
+                <span class="content"><span>парни</span></span>
+            </div><div class="message" data-message-id="403787">
+                <span class="chat-timestamp">11:35 UTC</span>
+                <span class="author" style="color: #2A9FD6">antistaminico:</span>
+                <span class="content"><span>1363526205047046317 id discord flame him</span></span>
+            </div><div class="message" data-message-id="403788">
+                <span class="chat-timestamp">11:37 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #4B2E83">canary</span> [Rich]:</span>
+                <span class="content"><span>🚽</span></span>
+            </div><div class="message" data-message-id="403789">
+                <span class="chat-timestamp">11:59 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #C5C6D3">evil</span> [Rich]:</span>
+                <span class="content"><span>skibidi toilet</span></span>
+            </div><div class="message" data-message-id="403790">
+                <span class="chat-timestamp">12:08 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #FFFFFF">ii</span> [Rich]:</span>
+                <span class="content"><span>o</span></span>
+            </div><div class="message" data-message-id="403791">
+                <span class="chat-timestamp">12:41 UTC</span>
+                <span class="author" style="color: #2A9FD6">TM124654:</span>
+                <span class="content"><span>heelo</span></span>
+            </div><div class="message" data-message-id="403792">
+                <span class="chat-timestamp">12:41 UTC</span>
+                <span class="author" style="color: #2A9FD6">TM124654:</span>
+                <span class="content"><span>😱</span></span>
+            </div><div class="message" data-message-id="403793">
+                <span class="chat-timestamp">13:05 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #BB1E64">attacking</span> [Rich]:</span>
+                <span class="content"><span>lol</span></span>
+            </div><div class="message" data-message-id="403794">
+                <span class="chat-timestamp">13:23 UTC</span>
+                <span class="author" style="color: #2A9FD6">anticipationist:</span>
+                <span class="content"><span>Hi losers</span></span>
+            </div><div class="message" data-message-id="403795">
+                <span class="chat-timestamp">14:14 UTC</span>
+                <span class="author" style="color: #2A9FD6">Ghoxt420:</span>
+                <span class="content"><span>yo</span></span>
+            </div><div class="message" data-message-id="403796">
+                <span class="chat-timestamp">14:16 UTC</span>
+                <span class="author" style="color: #2A9FD6">Ghoxt420:</span>
+                <span class="content"><span>is there a way to login to someones instagram ?</span></span>
+            </div><div class="message" data-message-id="403797">
+                <span class="chat-timestamp">14:20 UTC</span>
+                <span class="author" style="color: #2A9FD6">Ghoxt420:</span>
+                <span class="content"><span>or if theres a tool to spam report a instagram account ?</span></span>
+            </div><div class="message" data-message-id="403798">
+                <span class="chat-timestamp">14:29 UTC</span>
+                <span class="author" style="color: #2A9FD6">Ghoxt420:</span>
+                <span class="content"><span>if anyone knows how to spam report a instagram account please do the user : @definitelynoteli4</span></span>
+            </div><div class="message" data-message-id="403799">
+                <span class="chat-timestamp">14:30 UTC</span>
+                <span class="author" style="color: #2A9FD6">Ghoxt420:</span>
+                <span class="content"><span>bruh been leaking a underage girls number</span></span>
+            </div><div class="message" data-message-id="403800">
+                <span class="chat-timestamp">14:31 UTC</span>
+                <span class="author" style="color: #2A9FD6">Ghoxt420:</span>
+                <span class="content"><span>and he 30 years old</span></span>
+            </div><div class="message" data-message-id="403801">
+                <span class="chat-timestamp">14:32 UTC</span>
+                <span class="author" style="color: #2A9FD6">societyiscruel:</span>
+                <span class="content"><span>Anyone know a legitimate seller of gov mails?</span></span>
+            </div><div class="message" data-message-id="403802">
+                <span class="chat-timestamp">14:33 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #FFFFFF">ii</span> [Rich]:</span>
+                <span class="content"><span>yes</span></span>
+            </div><div class="message" data-message-id="403803">
+                <span class="chat-timestamp">14:33 UTC</span>
+                <span class="author" style="color: #2A9FD6">societyiscruel:</span>
+                <span class="content"><span>Send if you can brotha</span></span>
+            </div><div class="message" data-message-id="403804">
+                <span class="chat-timestamp">14:33 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #FFFFFF">ii</span> [Rich]:</span>
+                <span class="content"><span>@societyiscruel <a href="https://t.me/sadadsadsadw" target="_blank" style="color: #2A9FD6; text-decoration: none; hover:text-decoration: underline;">t.me/sadadsadsadw</a></span></span>
+            </div><div class="message" data-message-id="403805">
+                <span class="chat-timestamp">14:34 UTC</span>
+                <span class="author" style="color: #2A9FD6">societyiscruel:</span>
+                <span class="content"><span>I feel like ts a honeypot</span></span>
+            </div><div class="message" data-message-id="403806">
+                <span class="chat-timestamp">14:35 UTC</span>
+                <span class="author" style="color: #2A9FD6">societyiscruel:</span>
+                <span class="content"><span>Legit?</span></span>
+            </div><div class="message" data-message-id="403807">
+                <span class="chat-timestamp">14:35 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #FFFFFF">ii</span> [Rich]:</span>
+                <span class="content"><span>yes</span></span>
+            </div><div class="message" data-message-id="403808">
+                <span class="chat-timestamp">14:35 UTC</span>
+                <span class="author" style="color: #2A9FD6">DedSecHackers:</span>
+                <span class="content"><span>y'all catching child predators?</span></span>
+            </div><div class="message" data-message-id="403809">
+                <span class="chat-timestamp">14:36 UTC</span>
+                <span class="author" style="color: #2A9FD6">Unseenthought:</span>
+                <span class="content"><span>niggas thinkin im paying 30 for a username change im broke as fuck g</span></span>
+            </div><div class="message" data-message-id="403810">
+                <span class="chat-timestamp">14:37 UTC</span>
+                <span class="author" style="color: #2A9FD6">DedSecHackers:</span>
+                <span class="content"><span>bro is not punchmade dev</span></span>
+            </div><div class="message" data-message-id="403811">
+                <span class="chat-timestamp">15:00 UTC</span>
+                <span class="author" style="color: #2A9FD6">dir:</span>
+                <span class="content"><span>w-w-w-w welcum to doxbin</span></span>
+            </div><div class="message" data-message-id="403812">
+                <span class="chat-timestamp">15:00 UTC</span>
+                <span class="author" style="color: #2A9FD6">dir:</span>
+                <span class="content"><span>all of you niggers need to evacuate, this is a non-minority site.</span></span>
+            </div><div class="message" data-message-id="403813">
+                <span class="chat-timestamp">15:29 UTC</span>
+                <span class="author" style="color: #2A9FD6">Hypothetically:</span>
+                <span class="content"><span>Discord data leak hacker asking for money lol</span></span>
+            </div><div class="message" data-message-id="403814">
+                <span class="chat-timestamp">15:42 UTC</span>
+                <span class="author" style="color:#39ff14; font-weight:bold;"><span style="color: #FFFFFF">month</span> [Mod]:</span>
+                <span class="content"><span>lel</span></span>
+            </div><div class="message" data-message-id="403815">
+                <span class="chat-timestamp">15:50 UTC</span>
+                <span class="author" style="color: #2A9FD6">fuckedbyfear:</span>
+                <span class="content"><span>damn paste got taken down</span></span>
+            </div><div class="message" data-message-id="403816">
+                <span class="chat-timestamp">15:50 UTC</span>
+                <span class="author" style="color: #2A9FD6">fuckedbyfear:</span>
+                <span class="content"><span>got no notification why it got taken down</span></span>
+            </div><div class="message" data-message-id="403817">
+                <span class="chat-timestamp">15:50 UTC</span>
+                <span class="author" style="color: #2A9FD6">fuckedbyfear:</span>
+                <span class="content"><span>:sob:</span></span>
+            </div><div class="message" data-message-id="403818">
+                <span class="chat-timestamp">15:57 UTC</span>
+                <span class="author" style="color: #FFD700; font-weight: bold; background-image: url('/static/gold.gif');"><span style="color: #BB1E64">attacking</span> [Rich]:</span>
+                <span class="content"><span>Lol</span></span>
+            </div></div>
+    <div class="chat-input-container">
+        <input type="text" class="chat-input" id="messageInput" placeholder="Message Doxbin" maxlength="200">
+        <button class="chat-send-btn" onclick="sendMessage()">Send</button>
+    </div>
+</div>
+
+<div id="chatSettingsModal" class="chat-msg-modal">
+    <div class="chat-msg-modal-content" style="max-width: 300px;">
+        <h3 style="color: #fff; margin: 0 0 20px 0; font-size: 16px;">Chat Settings</h3>
+        <div class="chat-msg-button-container" style="gap: 15px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="color: #fff;">Show Chat</span>
+                <label class="switch">
+                    <input type="checkbox" id="showChatToggle">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="color: #fff;">Enable Chat</span>
+                <label class="switch">
+                    <input type="checkbox" id="chatEnabledToggle">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="color: #fff;">Allow Anonymous</span>
+                <label class="switch">
+                    <input type="checkbox" id="allowAnonymousToggle">
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="chat-msg-modal" id="chatMessageModal" onclick="closeMessageModal(event)">
+    <div class="chat-msg-modal-content">
+        <div id="chat-msg-info"></div>
+        <div class="chat-msg-button-container">
+            <button id="chatBanMessageBtn" class="chat-msg-button" onclick="chatBanUser()" style="display: none;">Mute</button>
+            <button id="chatDeleteMessageBtn" class="chat-msg-button" onclick="deleteSelectedMessage()" style="display: none;">Delete</button>
+            <button id="chatVisitProfileBtn" class="chat-msg-button" onclick="visitProfile()" style="display: none;"></button>
+            <button id="chatCopyMessageIdBtn" class="chat-msg-button" onclick="copyMessageId(this.dataset.messageId)" style="display: none;">Copy Message ID</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let selectedMessage = null;
+
+    window.isStaff = false;
+    window.authenticatedUsername = null;
+    window.authenticatedUserID = null;
+    window.sessionBrowserID = "49d7d024-4350-44ff-a784-81f9f2497f94";
+
+    function toggleChat() {
+        const container = document.querySelector('.chat-container');
+        container.classList.toggle('hidden');
+        localStorage.setItem('chatWindowOpen', !container.classList.contains('hidden'));
+        if (!container.classList.contains('hidden')) {
+            document.getElementById('messageInput').focus();
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const chatOpen = localStorage.getItem('chatWindowOpen') === 'true';
+        const container = document.querySelector('.chat-container');
+        if (chatOpen) {
+            container.classList.remove('hidden');
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // stop scroll propagation
+        const chatHeader = document.querySelector('.chat-header');
+        const chatInputContainer = document.querySelector('.chat-input-container');
+        
+        [chatHeader, chatInputContainer].forEach(element => {
+            element.addEventListener('touchmove', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }, { passive: false });
+            
+            element.addEventListener('wheel', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }, { passive: false });
+        });
+
+		socket.on("clear_chat", () => {
+			const messages = document.querySelectorAll('[data-message-id]');
+			messages.forEach(messageElement => {
+				messageElement.remove();
+			});
+		});
+        socket.on('send_message', function(message) {
+            addMessageToChat(message);
+        });
+        socket.on('delete_message', function(data) {
+            const messageElement = document.querySelector(`[data-message-id="${data.messageID}"]`);
+            if (messageElement) {
+                messageElement.remove();
+            }
+        });
+        const messageInput = document.getElementById('messageInput');
+        messageInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+        loadMessages();
+    });
+
+    function loadMessages() {
+        const chatMessages = document.getElementById('chatMessages');
+        const messages = [{"browserID": "cbb8b8ed-99a4-4502-be12-c9f66e9f77da", "content": "lel", "createdAt": "15:42 UTC", "displayName": "month", "messageID": 403814, "rank": "mod", "rankData": {"name": "Mod", "rankColor": "#39ff14", "rankHighlightColor": "#0F2D06", "rankStyle": "color:#39ff14; font-weight:bold;", "suffix": "[Mod]"}, "userID": 14, "usernameColor": "#FFFFFF"}, {"browserID": "f3b235f9-bd9b-4a4f-87c5-f2029db26725", "content": "Discord data leak hacker asking for money lol", "createdAt": "15:29 UTC", "displayName": "Hypothetically", "messageID": 403813, "rank": null, "rankData": null, "userID": 593411, "usernameColor": null}, {"browserID": "2faad481-010a-44d2-8103-30ef17fa42fa", "content": "all of you niggers need to evacuate, this is a non-minority site.", "createdAt": "15:00 UTC", "displayName": "dir", "messageID": 403812, "rank": null, "rankData": null, "userID": 311694, "usernameColor": null}, {"browserID": "2faad481-010a-44d2-8103-30ef17fa42fa", "content": "w-w-w-w welcum to doxbin", "createdAt": "15:00 UTC", "displayName": "dir", "messageID": 403811, "rank": null, "rankData": null, "userID": 311694, "usernameColor": null}, {"browserID": "7ee88887-e00a-4f91-a2cc-6d2631709768", "content": "bro is not punchmade dev", "createdAt": "14:37 UTC", "displayName": "DedSecHackers", "messageID": 403810, "rank": null, "rankData": null, "userID": 387403, "usernameColor": null}, {"browserID": "3c949dea-eaf5-41c7-b0b0-a28777bb9f29", "content": "niggas thinkin im paying 30 for a username change im broke as fuck g", "createdAt": "14:36 UTC", "displayName": "Unseenthought", "messageID": 403809, "rank": null, "rankData": null, "userID": 574009, "usernameColor": null}, {"browserID": "7ee88887-e00a-4f91-a2cc-6d2631709768", "content": "y\u0027all catching child predators?", "createdAt": "14:35 UTC", "displayName": "DedSecHackers", "messageID": 403808, "rank": null, "rankData": null, "userID": 387403, "usernameColor": null}, {"browserID": "bb966dde-ab78-409a-b13c-9d85a5233849", "content": "yes", "createdAt": "14:35 UTC", "displayName": "ii", "messageID": 403807, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 454791, "usernameColor": "#FFFFFF"}, {"browserID": "6c776d1d-276e-4033-bef4-e7e63c6ec2bc", "content": "Legit?", "createdAt": "14:35 UTC", "displayName": "societyiscruel", "messageID": 403806, "rank": null, "rankData": null, "userID": 595230, "usernameColor": null}, {"browserID": "6c776d1d-276e-4033-bef4-e7e63c6ec2bc", "content": "I feel like ts a honeypot", "createdAt": "14:34 UTC", "displayName": "societyiscruel", "messageID": 403805, "rank": null, "rankData": null, "userID": 595230, "usernameColor": null}, {"browserID": "bb966dde-ab78-409a-b13c-9d85a5233849", "content": "@societyiscruel t.me/sadadsadsadw", "createdAt": "14:33 UTC", "displayName": "ii", "messageID": 403804, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 454791, "usernameColor": "#FFFFFF"}, {"browserID": "6c776d1d-276e-4033-bef4-e7e63c6ec2bc", "content": "Send if you can brotha", "createdAt": "14:33 UTC", "displayName": "societyiscruel", "messageID": 403803, "rank": null, "rankData": null, "userID": 595230, "usernameColor": null}, {"browserID": "bb966dde-ab78-409a-b13c-9d85a5233849", "content": "yes", "createdAt": "14:33 UTC", "displayName": "ii", "messageID": 403802, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 454791, "usernameColor": "#FFFFFF"}, {"browserID": "6c776d1d-276e-4033-bef4-e7e63c6ec2bc", "content": "Anyone know a legitimate seller of gov mails?", "createdAt": "14:32 UTC", "displayName": "societyiscruel", "messageID": 403801, "rank": null, "rankData": null, "userID": 595230, "usernameColor": null}, {"browserID": "8e9d96dd-df0d-4d47-afcc-14aa6fdeee0d", "content": "and he 30 years old", "createdAt": "14:31 UTC", "displayName": "Ghoxt420", "messageID": 403800, "rank": null, "rankData": null, "userID": 595226, "usernameColor": null}, {"browserID": "8e9d96dd-df0d-4d47-afcc-14aa6fdeee0d", "content": "bruh been leaking a underage girls number", "createdAt": "14:30 UTC", "displayName": "Ghoxt420", "messageID": 403799, "rank": null, "rankData": null, "userID": 595226, "usernameColor": null}, {"browserID": "8e9d96dd-df0d-4d47-afcc-14aa6fdeee0d", "content": "if anyone knows how to spam report a instagram account please do the user : @definitelynoteli4", "createdAt": "14:29 UTC", "displayName": "Ghoxt420", "messageID": 403798, "rank": null, "rankData": null, "userID": 595226, "usernameColor": null}, {"browserID": "8e9d96dd-df0d-4d47-afcc-14aa6fdeee0d", "content": "or if theres a tool to spam report a instagram account ?", "createdAt": "14:20 UTC", "displayName": "Ghoxt420", "messageID": 403797, "rank": null, "rankData": null, "userID": 595226, "usernameColor": null}, {"browserID": "8e9d96dd-df0d-4d47-afcc-14aa6fdeee0d", "content": "is there a way to login to someones instagram ?", "createdAt": "14:16 UTC", "displayName": "Ghoxt420", "messageID": 403796, "rank": null, "rankData": null, "userID": 595226, "usernameColor": null}, {"browserID": "8e9d96dd-df0d-4d47-afcc-14aa6fdeee0d", "content": "yo", "createdAt": "14:14 UTC", "displayName": "Ghoxt420", "messageID": 403795, "rank": null, "rankData": null, "userID": 595226, "usernameColor": null}, {"browserID": "197acbae-7699-463c-a36e-97fe5806b176", "content": "Hi losers", "createdAt": "13:23 UTC", "displayName": "anticipationist", "messageID": 403794, "rank": null, "rankData": null, "userID": 550268, "usernameColor": null}, {"browserID": "2dc84bea-23d7-4f9a-b634-bb10c01d6bad", "content": "lol", "createdAt": "13:05 UTC", "displayName": "attacking", "messageID": 403793, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 446266, "usernameColor": "#BB1E64"}, {"browserID": "8739ba03-08dd-4455-a8c9-05f3f15295ab", "content": "\ud83d\ude31", "createdAt": "12:41 UTC", "displayName": "TM124654", "messageID": 403792, "rank": null, "rankData": null, "userID": 595220, "usernameColor": null}, {"browserID": "8739ba03-08dd-4455-a8c9-05f3f15295ab", "content": "heelo", "createdAt": "12:41 UTC", "displayName": "TM124654", "messageID": 403791, "rank": null, "rankData": null, "userID": 595220, "usernameColor": null}, {"browserID": "bb966dde-ab78-409a-b13c-9d85a5233849", "content": "o", "createdAt": "12:08 UTC", "displayName": "ii", "messageID": 403790, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 454791, "usernameColor": "#FFFFFF"}, {"browserID": "f061784d-58e1-46af-a7fd-18a956648b60", "content": "skibidi toilet", "createdAt": "11:59 UTC", "displayName": "evil", "messageID": 403789, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 592784, "usernameColor": "#C5C6D3"}, {"browserID": "51ce2858-6a6a-4148-8c0f-5f4479acf01a", "content": "\ud83d\udebd", "createdAt": "11:37 UTC", "displayName": "canary", "messageID": 403788, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 582959, "usernameColor": "#4B2E83"}, {"browserID": "f12dafe7-e05e-4c9e-b562-d9ca698d5da4", "content": "1363526205047046317 id discord flame him", "createdAt": "11:35 UTC", "displayName": "antistaminico", "messageID": 403787, "rank": null, "rankData": null, "userID": 594568, "usernameColor": null}, {"browserID": "2c8a87ef-9d46-40e5-bc30-ef0980e039ad", "content": "\u043f\u0430\u0440\u043d\u0438", "createdAt": "11:06 UTC", "displayName": "FARTUNA", "messageID": 403786, "rank": null, "rankData": null, "userID": 595212, "usernameColor": null}, {"browserID": "2c8a87ef-9d46-40e5-bc30-ef0980e039ad", "content": "\u043f\u0430\u0440\u043d\u0438 \u043a\u043e\u043c\u0443 \u0434\u0430\u0442\u044c \u043f\u0430\u0441\u043f\u043e\u0440\u0442 \u043a\u043e\u0435 \u043a\u0430\u043a\u043e\u0439 \u0434\u0435\u0432\u0430\u0445\u0438 ?", "createdAt": "11:06 UTC", "displayName": "FARTUNA", "messageID": 403785, "rank": null, "rankData": null, "userID": 595212, "usernameColor": null}, {"browserID": "2c8a87ef-9d46-40e5-bc30-ef0980e039ad", "content": "\u043f\u0430\u0440\u043d\u0438 \u043a\u043e\u043c\u0443 \u0434\u0430\u0442\u044c \u043f\u0430\u0441\u043f\u043e\u0440\u0442 \u043a\u043e\u0435 \u043a\u0430\u043a\u043e\u0439 \u0434\u0435\u0432\u0430\u0445\u0438 ?", "createdAt": "11:06 UTC", "displayName": "FARTUNA", "messageID": 403784, "rank": null, "rankData": null, "userID": 595212, "usernameColor": null}, {"browserID": "5fb7c558-85ab-4a50-b6c0-161148e77d6e", "content": "+79065656091 \u043f\u043e\u0437\u0432\u043e\u043d\u0438\u0442\u0435 \u0438 \u0437\u0430\u0445\u0443\u0435\u0441\u043e\u0441\u0442\u0435", "createdAt": "10:56 UTC", "displayName": "Bogdan148811", "messageID": 403783, "rank": null, "rankData": null, "userID": 595206, "usernameColor": null}, {"browserID": "5fb7c558-85ab-4a50-b6c0-161148e77d6e", "content": "+79065656091", "createdAt": "10:55 UTC", "displayName": "Bogdan148811", "messageID": 403782, "rank": null, "rankData": null, "userID": 595206, "usernameColor": null}, {"browserID": "2c5cf41f-b711-46ee-a870-1e996d5e629b", "content": "i need to find out this dudes ages cuz he most likely a pedo on roblox (dreaeaglex) is his tag", "createdAt": "10:43 UTC", "displayName": "7301139", "messageID": 403781, "rank": null, "rankData": null, "userID": 595177, "usernameColor": null}, {"browserID": "f061784d-58e1-46af-a7fd-18a956648b60", "content": "Hi @rockstar", "createdAt": "10:41 UTC", "displayName": "evil", "messageID": 403780, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 592784, "usernameColor": "#C5C6D3"}, {"browserID": "2c5cf41f-b711-46ee-a870-1e996d5e629b", "content": "and get my pc fried", "createdAt": "10:35 UTC", "displayName": "7301139", "messageID": 403778, "rank": null, "rankData": null, "userID": 595177, "usernameColor": null}, {"browserID": "32e00744-a540-43a0-b4a6-8db4de7fc05c", "content": "go on github lookup \"hacker tools\" and run them all", "createdAt": "10:34 UTC", "displayName": "disoc", "messageID": 403777, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 10728, "usernameColor": "#4C4CFF"}, {"browserID": "197acbae-7699-463c-a36e-97fe5806b176", "content": "no", "createdAt": "10:31 UTC", "displayName": "anticipationist", "messageID": 403775, "rank": null, "rankData": null, "userID": 550268, "usernameColor": null}, {"browserID": "2c5cf41f-b711-46ee-a870-1e996d5e629b", "content": "any1 here teaching doxxing?", "createdAt": "10:29 UTC", "displayName": "7301139", "messageID": 403774, "rank": null, "rankData": null, "userID": 595177, "usernameColor": null}, {"browserID": "32e00744-a540-43a0-b4a6-8db4de7fc05c", "content": "Yo", "createdAt": "10:29 UTC", "displayName": "disoc", "messageID": 403773, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 10728, "usernameColor": "#4C4CFF"}, {"browserID": "2d84a6d1-9980-42eb-a4e6-6d0928c1d309", "content": "Hi evil", "createdAt": "10:28 UTC", "displayName": "rockstar", "messageID": 403771, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 4720, "usernameColor": "#FFFFFF"}, {"browserID": "f061784d-58e1-46af-a7fd-18a956648b60", "content": "Hi", "createdAt": "10:28 UTC", "displayName": "evil", "messageID": 403770, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 592784, "usernameColor": "#C5C6D3"}, {"browserID": "32e00744-a540-43a0-b4a6-8db4de7fc05c", "content": "GalaxyArts you are a tweaker.", "createdAt": "10:23 UTC", "displayName": "disoc", "messageID": 403769, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 10728, "usernameColor": "#4C4CFF"}, {"browserID": "2dc84bea-23d7-4f9a-b634-bb10c01d6bad", "content": "i had that yesterday", "createdAt": "10:21 UTC", "displayName": "attacking", "messageID": 403766, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 446266, "usernameColor": "#BB1E64"}, {"browserID": "bd4abfeb-55dd-44fd-a433-aef7b5edd9ed", "content": "dude what the hell is happening why is doxbin white for me", "createdAt": "10:20 UTC", "displayName": "GalaxyArts", "messageID": 403765, "rank": "mod", "rankData": {"name": "Mod", "rankColor": "#39ff14", "rankHighlightColor": "#0F2D06", "rankStyle": "color:#39ff14; font-weight:bold;", "suffix": "[Mod]"}, "userID": 11184, "usernameColor": "#FFFFFF"}, {"browserID": "bd4abfeb-55dd-44fd-a433-aef7b5edd9ed", "content": "dude what the hell is happening why is doxbin white for me", "createdAt": "10:20 UTC", "displayName": "GalaxyArts", "messageID": 403764, "rank": "mod", "rankData": {"name": "Mod", "rankColor": "#39ff14", "rankHighlightColor": "#0F2D06", "rankStyle": "color:#39ff14; font-weight:bold;", "suffix": "[Mod]"}, "userID": 11184, "usernameColor": "#FFFFFF"}, {"browserID": "2dc84bea-23d7-4f9a-b634-bb10c01d6bad", "content": "Hi", "createdAt": "10:19 UTC", "displayName": "attacking", "messageID": 403763, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 446266, "usernameColor": "#BB1E64"}, {"browserID": "bd4abfeb-55dd-44fd-a433-aef7b5edd9ed", "content": "what the fuck man", "createdAt": "10:19 UTC", "displayName": "GalaxyArts", "messageID": 403762, "rank": "mod", "rankData": {"name": "Mod", "rankColor": "#39ff14", "rankHighlightColor": "#0F2D06", "rankStyle": "color:#39ff14; font-weight:bold;", "suffix": "[Mod]"}, "userID": 11184, "usernameColor": "#FFFFFF"}, {"browserID": "bd4abfeb-55dd-44fd-a433-aef7b5edd9ed", "content": "it\u0027s white for me....", "createdAt": "10:19 UTC", "displayName": "GalaxyArts", "messageID": 403761, "rank": "mod", "rankData": {"name": "Mod", "rankColor": "#39ff14", "rankHighlightColor": "#0F2D06", "rankStyle": "color:#39ff14; font-weight:bold;", "suffix": "[Mod]"}, "userID": 11184, "usernameColor": "#FFFFFF"}, {"browserID": "32e00744-a540-43a0-b4a6-8db4de7fc05c", "content": "It is not white.", "createdAt": "10:18 UTC", "displayName": "disoc", "messageID": 403760, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 10728, "usernameColor": "#4C4CFF"}, {"browserID": "32e00744-a540-43a0-b4a6-8db4de7fc05c", "content": "GalaxyArts you tweaking", "createdAt": "10:18 UTC", "displayName": "disoc", "messageID": 403759, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 10728, "usernameColor": "#4C4CFF"}, {"browserID": "bd4abfeb-55dd-44fd-a433-aef7b5edd9ed", "content": "is the website still white?", "createdAt": "10:17 UTC", "displayName": "GalaxyArts", "messageID": 403758, "rank": "mod", "rankData": {"name": "Mod", "rankColor": "#39ff14", "rankHighlightColor": "#0F2D06", "rankStyle": "color:#39ff14; font-weight:bold;", "suffix": "[Mod]"}, "userID": 11184, "usernameColor": "#FFFFFF"}, {"browserID": "bfa66d71-b260-4806-b0a8-8dea0fd91dbf", "content": "dox this pedo canadian leftist  twitch: CrYyPtiD discord: cryyptid_ 236263132681601024 battlenet: JustaNobody#1948", "createdAt": "10:17 UTC", "displayName": "ihaten1gg3rss", "messageID": 403757, "rank": null, "rankData": null, "userID": 587556, "usernameColor": null}, {"browserID": "927eb086-a7b3-4966-a970-b76818fdc29e", "content": "arent i just so tea!", "createdAt": "09:22 UTC", "displayName": "kittycomet", "messageID": 403756, "rank": null, "rankData": null, "userID": 591320, "usernameColor": null}, {"browserID": "32e00744-a540-43a0-b4a6-8db4de7fc05c", "content": "hi month", "createdAt": "09:03 UTC", "displayName": "disoc", "messageID": 403755, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 10728, "usernameColor": "#4C4CFF"}, {"browserID": "58c2e908-9dc8-4cdb-bc34-8b462b4f2379", "content": "Hi", "createdAt": "08:31 UTC", "displayName": "month", "messageID": 403752, "rank": "mod", "rankData": {"name": "Mod", "rankColor": "#39ff14", "rankHighlightColor": "#0F2D06", "rankStyle": "color:#39ff14; font-weight:bold;", "suffix": "[Mod]"}, "userID": 14, "usernameColor": "#FFFFFF"}, {"browserID": "2c5cf41f-b711-46ee-a870-1e996d5e629b", "content": "any1 teach doxxing", "createdAt": "08:20 UTC", "displayName": "7301139", "messageID": 403750, "rank": null, "rankData": null, "userID": 595177, "usernameColor": null}, {"browserID": "529e0654-4b58-4e53-9c9f-cc8a37000a98", "content": "Hi", "createdAt": "07:45 UTC", "displayName": "seem", "messageID": 403749, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 529970, "usernameColor": "#FF69B4"}, {"browserID": "529e0654-4b58-4e53-9c9f-cc8a37000a98", "content": "tf", "createdAt": "07:44 UTC", "displayName": "seem", "messageID": 403748, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 529970, "usernameColor": "#FF69B4"}, {"browserID": "9c4b2e2e-3d50-4ba8-89f3-93a023e622fb", "content": "this guy be gooning to minors", "createdAt": "07:40 UTC", "displayName": "yurist4rzs", "messageID": 403747, "rank": null, "rankData": null, "userID": 595186, "usernameColor": null}, {"browserID": "9c4b2e2e-3d50-4ba8-89f3-93a023e622fb", "content": "can someone pls help me dox this one person , like deadass I only have his discord n I need help , thank u ! @crabbypatty5610", "createdAt": "07:26 UTC", "displayName": "yurist4rzs", "messageID": 403746, "rank": null, "rankData": null, "userID": 595186, "usernameColor": null}, {"browserID": "cb32133e-18ba-44ba-86a6-45a38b8e4008", "content": "devilmaycry21", "createdAt": "06:52 UTC", "displayName": "UncKfjqlxo", "messageID": 403745, "rank": null, "rankData": null, "userID": 595183, "usernameColor": null}, {"browserID": "cb32133e-18ba-44ba-86a6-45a38b8e4008", "content": "i need yall to dox him, i only have his discord tho..", "createdAt": "06:52 UTC", "displayName": "UncKfjqlxo", "messageID": 403744, "rank": null, "rankData": null, "userID": 595183, "usernameColor": null}, {"browserID": "927eb086-a7b3-4966-a970-b76818fdc29e", "content": "oh hell no", "createdAt": "06:51 UTC", "displayName": "kittycomet", "messageID": 403743, "rank": null, "rankData": null, "userID": 591320, "usernameColor": null}, {"browserID": "cb32133e-18ba-44ba-86a6-45a38b8e4008", "content": "theres sum1 on discord hacking kids robloxs and selling those items 4 money, hes targetting kids 9-13", "createdAt": "06:50 UTC", "displayName": "UncKfjqlxo", "messageID": 403742, "rank": null, "rankData": null, "userID": 595183, "usernameColor": null}, {"browserID": "cb32133e-18ba-44ba-86a6-45a38b8e4008", "content": "yo", "createdAt": "06:50 UTC", "displayName": "UncKfjqlxo", "messageID": 403741, "rank": null, "rankData": null, "userID": 595183, "usernameColor": null}, {"browserID": "927eb086-a7b3-4966-a970-b76818fdc29e", "content": "hi 565 sorry i didnt see ur message", "createdAt": "06:44 UTC", "displayName": "kittycomet", "messageID": 403740, "rank": null, "rankData": null, "userID": 591320, "usernameColor": null}, {"browserID": "839cd3ee-3601-46ad-8d82-29cc4c844bb7", "content": "npd and taxing sent me feet pics can someone dox them pls?", "createdAt": "05:38 UTC", "displayName": "artillery", "messageID": 403739, "rank": "vip", "rankData": {"name": "VIP", "rankColor": "#9B318E", "rankHighlightColor": "#2D0A21", "rankStyle": "color: #9B318E; font-weight: bold;", "suffix": "[VIP]"}, "userID": 585730, "usernameColor": null}, {"browserID": "bdab1484-d12c-4cc5-9fd3-b4435fd21c89", "content": "yo", "createdAt": "05:38 UTC", "displayName": "vq59", "messageID": 403738, "rank": null, "rankData": null, "userID": 595178, "usernameColor": null}, {"browserID": "32e00744-a540-43a0-b4a6-8db4de7fc05c", "content": "Yo.", "createdAt": "05:33 UTC", "displayName": "disoc", "messageID": 403737, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 10728, "usernameColor": "#4C4CFF"}, {"browserID": "29beedfe-69d9-443a-8228-0c27ddd56686", "content": "i really need someones help pls", "createdAt": "04:50 UTC", "displayName": "BLOXY21221", "messageID": 403727, "rank": null, "rankData": null, "userID": 595171, "usernameColor": null}, {"browserID": "29beedfe-69d9-443a-8228-0c27ddd56686", "content": "Someone\u2019s been leaking girls\u2019 private photos and even messaging their parents. Now he\u2019s targeting my friend, and it\u2019s really hurting people.", "createdAt": "04:50 UTC", "displayName": "BLOXY21221", "messageID": 403724, "rank": null, "rankData": null, "userID": 595171, "usernameColor": null}, {"browserID": "29beedfe-69d9-443a-8228-0c27ddd56686", "content": "guys", "createdAt": "04:49 UTC", "displayName": "BLOXY21221", "messageID": 403723, "rank": null, "rankData": null, "userID": 595171, "usernameColor": null}, {"browserID": "29beedfe-69d9-443a-8228-0c27ddd56686", "content": "yo", "createdAt": "04:49 UTC", "displayName": "BLOXY21221", "messageID": 403722, "rank": null, "rankData": null, "userID": 595171, "usernameColor": null}, {"browserID": "75afbf35-848f-4f70-939b-d6f6087082f6", "content": "(703) 439-7147 Anyone got an address on this number?", "createdAt": "03:50 UTC", "displayName": "Terrorz", "messageID": 403721, "rank": null, "rankData": null, "userID": 594705, "usernameColor": null}, {"browserID": "961ea3a4-bd24-4e9a-bba4-1ad5b16bc2dc", "content": "Anyways gn yall police decides not to answer me so", "createdAt": "03:44 UTC", "displayName": "Lostbitch1", "messageID": 403720, "rank": null, "rankData": null, "userID": 595167, "usernameColor": null}, {"browserID": "961ea3a4-bd24-4e9a-bba4-1ad5b16bc2dc", "content": "2808 N Remington Dr  Angleton, TX 77515", "createdAt": "03:44 UTC", "displayName": "Lostbitch1", "messageID": 403719, "rank": null, "rankData": null, "userID": 595167, "usernameColor": null}, {"browserID": "961ea3a4-bd24-4e9a-bba4-1ad5b16bc2dc", "content": "Is that alright", "createdAt": "03:43 UTC", "displayName": "Lostbitch1", "messageID": 403718, "rank": null, "rankData": null, "userID": 595167, "usernameColor": null}, {"browserID": "961ea3a4-bd24-4e9a-bba4-1ad5b16bc2dc", "content": "He takes pics of little girls", "createdAt": "03:43 UTC", "displayName": "Lostbitch1", "messageID": 403717, "rank": null, "rankData": null, "userID": 595167, "usernameColor": null}, {"browserID": "961ea3a4-bd24-4e9a-bba4-1ad5b16bc2dc", "content": "So I\u0027ma pase it here if someone could paste it for me?", "createdAt": "03:42 UTC", "displayName": "Lostbitch1", "messageID": 403716, "rank": null, "rankData": null, "userID": 595167, "usernameColor": null}, {"browserID": "961ea3a4-bd24-4e9a-bba4-1ad5b16bc2dc", "content": "So I cant paste for some reason", "createdAt": "03:42 UTC", "displayName": "Lostbitch1", "messageID": 403715, "rank": null, "rankData": null, "userID": 595167, "usernameColor": null}, {"browserID": "cbb8b8ed-99a4-4502-be12-c9f66e9f77da", "content": "lol", "createdAt": "03:42 UTC", "displayName": "month", "messageID": 403714, "rank": "mod", "rankData": {"name": "Mod", "rankColor": "#39ff14", "rankHighlightColor": "#0F2D06", "rankStyle": "color:#39ff14; font-weight:bold;", "suffix": "[Mod]"}, "userID": 14, "usernameColor": "#FFFFFF"}, {"browserID": "961ea3a4-bd24-4e9a-bba4-1ad5b16bc2dc", "content": "Hello", "createdAt": "03:42 UTC", "displayName": "Lostbitch1", "messageID": 403713, "rank": null, "rankData": null, "userID": 595167, "usernameColor": null}, {"browserID": "86e7959e-7d0c-44a3-abff-ec0abada1a78", "content": "hi december", "createdAt": "02:56 UTC", "displayName": "565", "messageID": 403712, "rank": null, "rankData": null, "userID": 351430, "usernameColor": null}, {"browserID": "86e7959e-7d0c-44a3-abff-ec0abada1a78", "content": "hi month", "createdAt": "02:56 UTC", "displayName": "565", "messageID": 403711, "rank": null, "rankData": null, "userID": 351430, "usernameColor": null}, {"browserID": "86e7959e-7d0c-44a3-abff-ec0abada1a78", "content": "hi kitty", "createdAt": "02:55 UTC", "displayName": "565", "messageID": 403709, "rank": null, "rankData": null, "userID": 351430, "usernameColor": null}, {"browserID": "86e7959e-7d0c-44a3-abff-ec0abada1a78", "content": "happy halloween losers", "createdAt": "02:55 UTC", "displayName": "565", "messageID": 403708, "rank": null, "rankData": null, "userID": 351430, "usernameColor": null}, {"browserID": "927eb086-a7b3-4966-a970-b76818fdc29e", "content": "im just so tea", "createdAt": "02:51 UTC", "displayName": "kittycomet", "messageID": 403707, "rank": null, "rankData": null, "userID": 591320, "usernameColor": null}, {"browserID": "9f099ded-1fc1-4f16-86db-4373d0f9fc57", "content": "hi", "createdAt": "02:31 UTC", "displayName": "december", "messageID": 403706, "rank": "criminal", "rankData": {"name": "Criminal", "rankColor": "#780A48", "rankHighlightColor": "#2B021B", "rankStyle": "color: #780A48; font-weight: bold;", "suffix": "[Criminal]"}, "userID": 474706, "usernameColor": "#C5C6D3"}, {"browserID": "d63a8f0f-ed5c-43ca-9e49-1fe18080c0e7", "content": "sup homies", "createdAt": "02:18 UTC", "displayName": "asce", "messageID": 403705, "rank": null, "rankData": null, "userID": 591028, "usernameColor": null}, {"browserID": "cbb8b8ed-99a4-4502-be12-c9f66e9f77da", "content": "hi", "createdAt": "02:16 UTC", "displayName": "month", "messageID": 403704, "rank": "mod", "rankData": {"name": "Mod", "rankColor": "#39ff14", "rankHighlightColor": "#0F2D06", "rankStyle": "color:#39ff14; font-weight:bold;", "suffix": "[Mod]"}, "userID": 14, "usernameColor": "#FFFFFF"}, {"browserID": "3a950af0-bce7-4ad6-b09a-9c3244f48810", "content": "Cooked.", "createdAt": "02:13 UTC", "displayName": "zac", "messageID": 403703, "rank": null, "rankData": null, "userID": 379155, "usernameColor": null}, {"browserID": "3a950af0-bce7-4ad6-b09a-9c3244f48810", "content": "LLool", "createdAt": "02:13 UTC", "displayName": "zac", "messageID": 403702, "rank": null, "rankData": null, "userID": 379155, "usernameColor": null}, {"browserID": "c00da249-5508-414a-8941-307c88c2f91a", "content": "MTM2MTAwNDUxMDE4MDU0MDQ5MA==", "createdAt": "01:42 UTC", "displayName": "iohasicihaSihc", "messageID": 403701, "rank": null, "rankData": null, "userID": 569513, "usernameColor": null}, {"browserID": "3cbf2034-e98e-4a68-a13a-991272e9baf7", "content": "MTQxMTc1MzUwOTU3Mjg0MTU0Mw==", "createdAt": "01:24 UTC", "displayName": "itsslixenn", "messageID": 403700, "rank": null, "rankData": null, "userID": 594802, "usernameColor": null}, {"browserID": "c4342598-a738-4207-8117-003c8bb03cef", "content": "what do yall use to dox?", "createdAt": "01:05 UTC", "displayName": "doxbadpeople", "messageID": 403699, "rank": null, "rankData": null, "userID": 595154, "usernameColor": null}, {"browserID": "2faad481-010a-44d2-8103-30ef17fa42fa", "content": "whats up niggers! happy halloween", "createdAt": "23:50 UTC", "displayName": "dir", "messageID": 403698, "rank": null, "rankData": null, "userID": 311694, "usernameColor": null}, {"browserID": "6c0e1f7b-488b-4cce-a27d-e1c31b88300c", "content": "goodnight guys", "createdAt": "23:24 UTC", "displayName": "Ahmedkarbourg", "messageID": 403697, "rank": null, "rankData": null, "userID": 595093, "usernameColor": null}, {"browserID": "6c0e1f7b-488b-4cce-a27d-e1c31b88300c", "content": "imma goto sleep", "createdAt": "23:23 UTC", "displayName": "Ahmedkarbourg", "messageID": 403696, "rank": null, "rankData": null, "userID": 595093, "usernameColor": null}, {"browserID": "cdff5e24-c768-466f-a49e-112d3f0f08e1", "content": "my dc its chaoszone43", "createdAt": "23:20 UTC", "displayName": "idkbroimbot", "messageID": 403695, "rank": null, "rankData": null, "userID": 595136, "usernameColor": null}, {"browserID": "cdff5e24-c768-466f-a49e-112d3f0f08e1", "content": "who can learn me pls", "createdAt": "23:19 UTC", "displayName": "idkbroimbot", "messageID": 403694, "rank": null, "rankData": null, "userID": 595136, "usernameColor": null}, {"browserID": "cdff5e24-c768-466f-a49e-112d3f0f08e1", "content": "guys how to dox?", "createdAt": "23:19 UTC", "displayName": "idkbroimbot", "messageID": 403693, "rank": null, "rankData": null, "userID": 595136, "usernameColor": null}, {"browserID": "2dc84bea-23d7-4f9a-b634-bb10c01d6bad", "content": "fire", "createdAt": "22:58 UTC", "displayName": "attacking", "messageID": 403692, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 446266, "usernameColor": "#BB1E64"}, {"browserID": "529e0654-4b58-4e53-9c9f-cc8a37000a98", "content": "a vampire n a zombie fs", "createdAt": "22:54 UTC", "displayName": "seem", "messageID": 403691, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 529970, "usernameColor": "#FF69B4"}, {"browserID": "529e0654-4b58-4e53-9c9f-cc8a37000a98", "content": "ima cool nigga", "createdAt": "22:54 UTC", "displayName": "seem", "messageID": 403690, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 529970, "usernameColor": "#FF69B4"}, {"browserID": "2dc84bea-23d7-4f9a-b634-bb10c01d6bad", "content": "wild", "createdAt": "21:35 UTC", "displayName": "attacking", "messageID": 403689, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 446266, "usernameColor": "#BB1E64"}, {"browserID": "9b8dce70-10dd-4b49-84b3-f85eacb03af2", "content": "brazy", "createdAt": "21:35 UTC", "displayName": "devil", "messageID": 403688, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 15123, "usernameColor": null}, {"browserID": "5de61bb2-e6a4-414c-a9a0-fa8a47dde107", "content": "lol", "createdAt": "21:23 UTC", "displayName": "Avsourd", "messageID": 403687, "rank": null, "rankData": null, "userID": 587743, "usernameColor": null}, {"browserID": "8b66b244-a41c-490c-bcd1-e7de4d4e2224", "content": "\u041f\u0440\u0438\u0432\u0435\u0442", "createdAt": "21:15 UTC", "displayName": "Tyayausu", "messageID": 403686, "rank": null, "rankData": null, "userID": 595094, "usernameColor": null}, {"browserID": "8b66b244-a41c-490c-bcd1-e7de4d4e2224", "content": "Hi", "createdAt": "21:15 UTC", "displayName": "Tyayausu", "messageID": 403685, "rank": null, "rankData": null, "userID": 595094, "usernameColor": null}, {"browserID": "2dc84bea-23d7-4f9a-b634-bb10c01d6bad", "content": "How do u get bullied by a pedophile", "createdAt": "21:13 UTC", "displayName": "attacking", "messageID": 403684, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 446266, "usernameColor": "#BB1E64"}, {"browserID": "5de61bb2-e6a4-414c-a9a0-fa8a47dde107", "content": "tf who?", "createdAt": "20:25 UTC", "displayName": "Avsourd", "messageID": 403683, "rank": null, "rankData": null, "userID": 587743, "usernameColor": null}, {"browserID": "f2026dab-d8c0-42d9-b58c-9747de0b96d7", "content": "Hi", "createdAt": "20:21 UTC", "displayName": "TrashyOG", "messageID": 403682, "rank": null, "rankData": null, "userID": 595103, "usernameColor": null}, {"browserID": "f2026dab-d8c0-42d9-b58c-9747de0b96d7", "content": "I\u0027m getting bullied by pedo in discord", "createdAt": "20:21 UTC", "displayName": "TrashyOG", "messageID": 403681, "rank": null, "rankData": null, "userID": 595103, "usernameColor": null}, {"browserID": "f061784d-58e1-46af-a7fd-18a956648b60", "content": "hi", "createdAt": "20:09 UTC", "displayName": "evil", "messageID": 403680, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 592784, "usernameColor": "#C5C6D3"}, {"browserID": "b5bace3d-a45d-4a17-ac0c-f32d9f9d4c25", "content": "hi", "createdAt": "19:45 UTC", "displayName": "lollolacustre", "messageID": 403679, "rank": null, "rankData": null, "userID": 452553, "usernameColor": null}, {"browserID": "ac805ce0-8c4c-45f2-9e8d-65e17b0a07bc", "content": "wsp", "createdAt": "19:32 UTC", "displayName": "Branson", "messageID": 403678, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 498414, "usernameColor": null}, {"browserID": "2dc84bea-23d7-4f9a-b634-bb10c01d6bad", "content": "hi", "createdAt": "19:21 UTC", "displayName": "attacking", "messageID": 403677, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 446266, "usernameColor": "#BB1E64"}, {"browserID": "9f099ded-1fc1-4f16-86db-4373d0f9fc57", "content": "hi", "createdAt": "19:16 UTC", "displayName": "december", "messageID": 403676, "rank": "criminal", "rankData": {"name": "Criminal", "rankColor": "#780A48", "rankHighlightColor": "#2B021B", "rankStyle": "color: #780A48; font-weight: bold;", "suffix": "[Criminal]"}, "userID": 474706, "usernameColor": "#C5C6D3"}, {"browserID": "2dc84bea-23d7-4f9a-b634-bb10c01d6bad", "content": "Why do you have the Kali Linux motto in your profile", "createdAt": "18:41 UTC", "displayName": "attacking", "messageID": 403675, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 446266, "usernameColor": "#BB1E64"}, {"browserID": "bb027a7f-2b40-4222-9c12-0dc16586c593", "content": "can i get uhhhhhhhhh rep pls", "createdAt": "18:30 UTC", "displayName": "zov", "messageID": 403674, "rank": "criminal", "rankData": {"name": "Criminal", "rankColor": "#780A48", "rankHighlightColor": "#2B021B", "rankStyle": "color: #780A48; font-weight: bold;", "suffix": "[Criminal]"}, "userID": 459968, "usernameColor": "#FFFFFF"}, {"browserID": "6c0e1f7b-488b-4cce-a27d-e1c31b88300c", "content": "i followed u too", "createdAt": "18:13 UTC", "displayName": "Ahmedkarbourg", "messageID": 403673, "rank": null, "rankData": null, "userID": 595093, "usernameColor": null}, {"browserID": "6c0e1f7b-488b-4cce-a27d-e1c31b88300c", "content": "ily girl", "createdAt": "18:13 UTC", "displayName": "Ahmedkarbourg", "messageID": 403672, "rank": null, "rankData": null, "userID": 595093, "usernameColor": null}, {"browserID": "1c80889d-8700-4a93-9f5b-3dd6dbe24e6f", "content": "I have the same problem lol i love it", "createdAt": "18:12 UTC", "displayName": "Pinkdrugs234", "messageID": 403671, "rank": null, "rankData": null, "userID": 595084, "usernameColor": null}, {"browserID": "6c0e1f7b-488b-4cce-a27d-e1c31b88300c", "content": "can yall look at my dox? (pedo eguy)", "createdAt": "18:10 UTC", "displayName": "Ahmedkarbourg", "messageID": 403670, "rank": null, "rankData": null, "userID": 595093, "usernameColor": null}, {"browserID": "605af0b2-a575-4821-a6bf-3ad6d073dc53", "content": "i love killing Pedo\u0027s", "createdAt": "18:06 UTC", "displayName": "Ahmeddd", "messageID": 403669, "rank": null, "rankData": null, "userID": 595092, "usernameColor": null}, {"browserID": "605af0b2-a575-4821-a6bf-3ad6d073dc53", "content": "cape sucks cock", "createdAt": "18:05 UTC", "displayName": "Ahmeddd", "messageID": 403668, "rank": null, "rankData": null, "userID": 595092, "usernameColor": null}, {"browserID": "605af0b2-a575-4821-a6bf-3ad6d073dc53", "content": "Peachtea is my daddy", "createdAt": "18:05 UTC", "displayName": "Ahmeddd", "messageID": 403666, "rank": null, "rankData": null, "userID": 595092, "usernameColor": null}, {"browserID": "055ceb84-e0d5-4ca4-a2eb-4f48e5acc985", "content": "Ok", "createdAt": "18:05 UTC", "displayName": "DoreamonGamerYT", "messageID": 403667, "rank": null, "rankData": null, "userID": 592506, "usernameColor": null}, {"browserID": "605af0b2-a575-4821-a6bf-3ad6d073dc53", "content": "nigga", "createdAt": "18:05 UTC", "displayName": "Ahmeddd", "messageID": 403665, "rank": null, "rankData": null, "userID": 595092, "usernameColor": null}, {"browserID": "055ceb84-e0d5-4ca4-a2eb-4f48e5acc985", "content": "what is it", "createdAt": "18:05 UTC", "displayName": "DoreamonGamerYT", "messageID": 403664, "rank": null, "rankData": null, "userID": 592506, "usernameColor": null}, {"browserID": "605af0b2-a575-4821-a6bf-3ad6d073dc53", "content": "im muslim", "createdAt": "18:05 UTC", "displayName": "Ahmeddd", "messageID": 403663, "rank": null, "rankData": null, "userID": 595092, "usernameColor": null}, {"browserID": "055ceb84-e0d5-4ca4-a2eb-4f48e5acc985", "content": "109.185.218.165", "createdAt": "18:05 UTC", "displayName": "DoreamonGamerYT", "messageID": 403662, "rank": null, "rankData": null, "userID": 592506, "usernameColor": null}, {"browserID": "605af0b2-a575-4821-a6bf-3ad6d073dc53", "content": "alaha wakbaa", "createdAt": "18:05 UTC", "displayName": "Ahmeddd", "messageID": 403661, "rank": null, "rankData": null, "userID": 595092, "usernameColor": null}, {"browserID": "1c80889d-8700-4a93-9f5b-3dd6dbe24e6f", "content": "+420", "createdAt": "17:47 UTC", "displayName": "Pinkdrugs234", "messageID": 403660, "rank": null, "rankData": null, "userID": 595084, "usernameColor": null}, {"browserID": "1c80889d-8700-4a93-9f5b-3dd6dbe24e6f", "content": "*420", "createdAt": "17:47 UTC", "displayName": "Pinkdrugs234", "messageID": 403659, "rank": null, "rankData": null, "userID": 595084, "usernameColor": null}, {"browserID": "7bf7f299-8a1c-4635-988f-07027586384c", "content": "whats the country code", "createdAt": "17:40 UTC", "displayName": "vvproxyfan", "messageID": 403658, "rank": null, "rankData": null, "userID": 595087, "usernameColor": null}, {"browserID": "7bf7f299-8a1c-4635-988f-07027586384c", "content": "uh", "createdAt": "17:40 UTC", "displayName": "vvproxyfan", "messageID": 403657, "rank": null, "rankData": null, "userID": 595087, "usernameColor": null}, {"browserID": "1c80889d-8700-4a93-9f5b-3dd6dbe24e6f", "content": "He tried to rape minor he beated me", "createdAt": "17:27 UTC", "displayName": "Pinkdrugs234", "messageID": 403656, "rank": null, "rankData": null, "userID": 595084, "usernameColor": null}, {"browserID": "1c80889d-8700-4a93-9f5b-3dd6dbe24e6f", "content": "+420733223504 dox him abuser ex", "createdAt": "17:25 UTC", "displayName": "Pinkdrugs234", "messageID": 403655, "rank": null, "rankData": null, "userID": 595084, "usernameColor": null}, {"browserID": "2dc84bea-23d7-4f9a-b634-bb10c01d6bad", "content": "Wtf are these questions", "createdAt": "17:14 UTC", "displayName": "attacking", "messageID": 403654, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 446266, "usernameColor": "#BB1E64"}, {"browserID": "277bf5b1-06a1-463a-ae4a-a9da4c82b35a", "content": "Guys can I just dox anyone I want like is it easy?", "createdAt": "16:59 UTC", "displayName": "CXBZWRLD", "messageID": 403653, "rank": null, "rankData": null, "userID": 595081, "usernameColor": null}, {"browserID": "d63a8f0f-ed5c-43ca-9e49-1fe18080c0e7", "content": "rep me niggas", "createdAt": "16:56 UTC", "displayName": "asce", "messageID": 403652, "rank": null, "rankData": null, "userID": 591028, "usernameColor": null}, {"browserID": "32e00744-a540-43a0-b4a6-8db4de7fc05c", "content": "hi", "createdAt": "16:42 UTC", "displayName": "disoc", "messageID": 403651, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 10728, "usernameColor": "#4C4CFF"}, {"browserID": "2d84a6d1-9980-42eb-a4e6-6d0928c1d309", "content": "Hi guy\u0027s", "createdAt": "16:40 UTC", "displayName": "rockstar", "messageID": 403650, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 4720, "usernameColor": "#FFFFFF"}, {"browserID": "f12dafe7-e05e-4c9e-b562-d9ca698d5da4", "content": "341549023339216907 dox him too", "createdAt": "16:25 UTC", "displayName": "antistaminico", "messageID": 403649, "rank": null, "rankData": null, "userID": 594568, "usernameColor": null}, {"browserID": "0109b547-4a58-4852-9cdc-1a76ca7ca7f7", "content": "How to delete ?", "createdAt": "16:24 UTC", "displayName": "0k0IsDefiant", "messageID": 403648, "rank": null, "rankData": null, "userID": 595073, "usernameColor": null}, {"browserID": "f12dafe7-e05e-4c9e-b562-d9ca698d5da4", "content": "609063502358904839 dox him please", "createdAt": "16:20 UTC", "displayName": "antistaminico", "messageID": 403647, "rank": null, "rankData": null, "userID": 594568, "usernameColor": null}, {"browserID": "d63a8f0f-ed5c-43ca-9e49-1fe18080c0e7", "content": "they\u0027ll delete it imitatively", "createdAt": "16:13 UTC", "displayName": "asce", "messageID": 403646, "rank": null, "rankData": null, "userID": 591028, "usernameColor": null}, {"browserID": "d63a8f0f-ed5c-43ca-9e49-1fe18080c0e7", "content": "just give money", "createdAt": "16:13 UTC", "displayName": "asce", "messageID": 403645, "rank": null, "rankData": null, "userID": 591028, "usernameColor": null}, {"browserID": "91c166f5-93be-432e-b579-6601094b493d", "content": "rep 4 rep?", "createdAt": "16:04 UTC", "displayName": "aura", "messageID": 403644, "rank": null, "rankData": null, "userID": 594213, "usernameColor": null}, {"browserID": "91c166f5-93be-432e-b579-6601094b493d", "content": "prince", "createdAt": "16:04 UTC", "displayName": "aura", "messageID": 403643, "rank": null, "rankData": null, "userID": 594213, "usernameColor": null}, {"browserID": "7034c8d1-1e76-4c44-b253-9d59e65952ee", "content": "LOOOOOOOOOOOOOOOOOOOOOL", "createdAt": "16:00 UTC", "displayName": "prince", "messageID": 403642, "rank": "rich", "rankData": {"name": "Rich", "rankColor": "#FFD700", "rankHighlightColor": "#2b200d", "rankStyle": "color: #FFD700; font-weight: bold; background-image: url(\u0027/static/gold.gif\u0027);", "suffix": "[Rich]"}, "userID": 280394, "usernameColor": "#365DDA"}, {"browserID": "7ab5bc63-1b34-4743-85a5-c597b7151224", "content": "hey guys", "createdAt": "15:49 UTC", "displayName": "peoplepleaser123", "messageID": 403640, "rank": null, "rankData": null, "userID": 553908, "usernameColor": null}, {"browserID": "7ab5bc63-1b34-4743-85a5-c597b7151224", "content": "hey guys", "createdAt": "15:49 UTC", "displayName": "peoplepleaser123", "messageID": 403641, "rank": null, "rankData": null, "userID": 553908, "usernameColor": null}];
+        messages.reverse().forEach(message => {
+            addMessageToChat(message);
+        });
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function sendMessage() {
+        const messageInput = document.getElementById('messageInput');
+        const content = messageInput.value.trim();
+        if (content) {
+            fetch(`/api/sendMessage?content=${encodeURIComponent(content)}`, {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                messageInput.value = '';
+                
+                const chatMessages = document.getElementById('chatMessages');
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                
+                if (!data.success && data.error && data.remaining) {
+                    const messageInput = document.getElementById('messageInput');
+                    const sendButton = document.querySelector('.chat-send-btn');
+                    messageInput.disabled = true;
+                    sendButton.disabled = true;
+
+                    setTimeout(() => {
+                        messageInput.disabled = false;
+                        sendButton.disabled = false;
+                        messageInput.focus();
+                    }, data.remaining);
+                }
+            });
+        }
+    }
+
+    function addMessageToChat(message) {
+        const chatMessages = document.getElementById('chatMessages');
+        const messageElement = document.createElement('div');
+        messageElement.className = 'message';
+        messageElement.dataset.messageId = message.messageID;
+        let authorStyle = '';
+        let displayName = message.displayName;
+        
+        if (message.userID === null && message.browserID === null) {
+            authorStyle = 'color: #ff0000; font-weight: bold;';
+            displayName = `${displayName} [System]`;
+            messageElement.innerHTML = `
+                <span class="chat-timestamp">${message.createdAt}</span>
+                <span class="author" style="${authorStyle}">${displayName}:</span>
+                <span class="content"><span>${linkifyText(message.content, true)}</span></span>
+            `;
+            messageElement.addEventListener('click', function(e) {
+                if (!e.target.closest('a')) {
+                    showMessageModal(message, e);
+                }
+            });
+        } else {
+            if (message.userID === null) {
+                authorStyle = 'color: #fff';
+                displayName = `${displayName} [Anonymous]`;
+            } else if (message.rankData) {
+                authorStyle = message.rankData.rankStyle;
+                if (message.usernameColor) {
+                    displayName = `<span style="color: ${message.usernameColor}">${displayName}</span> ${message.rankData.suffix}`;
+                } else {
+                    displayName = `${displayName} ${message.rankData.suffix}`;
+                }
+            } else {
+                authorStyle = 'color: #2A9FD6';
+                if (message.usernameColor) {
+                    displayName = `<span style="color: ${message.usernameColor}">${displayName}</span>`;
+                }
+            }
+            
+            const content = linkifyText(message.content);
+            
+            messageElement.innerHTML = `
+                <span class="chat-timestamp">${message.createdAt}</span>
+                <span class="author" style="${authorStyle}">${displayName}:</span>
+                <span class="content"><span>${content}</span></span>
+            `;
+            
+            messageElement.addEventListener('click', function(e) {
+                if (!e.target.closest('a')) {
+                    showMessageModal(message, e);
+                }
+            });
+        }
+        
+        chatMessages.appendChild(messageElement);
+        
+        const isNearBottom = chatMessages.scrollHeight - chatMessages.clientHeight - chatMessages.scrollTop < 100;
+        if (isNearBottom) {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+    }
+
+    function linkifyText(text, isSystem = false) {
+        if (!isSystem) {
+            text = escapeHtml(text);
+        }
+        
+        const urlPattern = /(https?:\/\/[^\s]+)|(?<![:/])((?:[\w-]+\.)+[\w-]+(?:\/[^\s]*)?)/g;
+        let processedText = text.replace(urlPattern, function(url, fullUrl, shortUrl) {
+            if (url.toLowerCase().endsWith('.gif')) {
+                return url;
+            }
+            const finalUrl = fullUrl ? url : 'https://' + url;
+            return `<a href="${sanitize(finalUrl)}" target="_blank" style="color: #2A9FD6; text-decoration: none; hover:text-decoration: underline;">${url}</a>`;
+        });
+        
+        if (window.authenticatedUsername) {
+            const mentionRegex = new RegExp(`(^|\\s)(@${window.authenticatedUsername})(?![^<]*>|[^<>]*<\/)`, 'gi');
+            processedText = processedText.replace(mentionRegex, '$1<span style="color: #2A9FD6 !important">$2</span>');
+        }
+        
+        return processedText;
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    async function deleteMessage(messageID) {
+        try {
+            const response = await fetch(`/api/deleteMessage?messageID=${messageID}`);
+            const data = await response.json();
+            if (data.success) {
+                const messageElement = document.querySelector(`[data-message-id="${messageID}"]`);
+                if (messageElement) {
+                    messageElement.replaceWith(messageElement.cloneNode(true));
+                    messageElement.remove();
+                }
+                const modal = document.getElementById('chatMessageModal');
+                modal.classList.remove('show');
+                selectedMessage = null;
+            } else {
+                console.error('Failed to delete message:', data.error);
+            }
+        } catch (error) {
+            console.error('Failed to delete message:', error);
+        }
+    }
+
+    function deleteSelectedMessage() {
+        if (selectedMessage) {
+            const messageId = selectedMessage.messageID;
+            selectedMessage = null;
+            deleteMessage(messageId);
+        }
+    }
+
+    function showMessageModal(message, event) {
+        const modal = document.getElementById('chatMessageModal');
+        const messageInfo = document.getElementById('chat-msg-info');
+        const chatBanBtn = document.getElementById('chatBanMessageBtn');
+        const copyMessageIdBtn = document.getElementById('chatCopyMessageIdBtn');
+        const visitProfileBtn = document.getElementById('chatVisitProfileBtn');
+        const deleteMessageBtn = document.getElementById('chatDeleteMessageBtn');
+        
+        let authorStyle = '';
+        let displayName = message.displayName;
+        
+        if (!window.isStaff || (message.userID === null && message.browserID === null)) {
+            chatBanBtn.style.display = 'none';
+        } else {
+            chatBanBtn.style.display = 'block';
+            selectedMessage = message;
+        }
+
+        if (message.userID === null && message.browserID === null) {
+            authorStyle = 'color: #ff0000; font-weight: bold;';
+            displayName = `${displayName} [System]`;
+            messageInfo.innerHTML = `
+                <div style="margin-bottom: 10px; display: flex; align-items: center; gap: 5px;">
+                    <span class="chat-timestamp">${message.createdAt}</span>
+                    <span class="author" style="${authorStyle}; margin: 0;">${displayName}:</span>
+                </div>
+                <div class="content" style="color: #fff; word-break: break-word; margin: 0;">${linkifyText(message.content, true)}</div>
+            `;
+            visitProfileBtn.style.display = 'none';
+        } else if (message.userID === null) {
+            authorStyle = 'color: #fff';
+            displayName = `${displayName} [Anonymous]`;
+            messageInfo.innerHTML = `
+                <div style="margin-bottom: 10px; display: flex; align-items: center; gap: 5px;">
+                    <span class="chat-timestamp">${message.createdAt}</span>
+                    <span class="author" style="${authorStyle}; margin: 0;">${displayName}:</span>
+                </div>
+                <div class="content" style="color: #fff; word-break: break-word; margin: 0;">${linkifyText(escapeHtml(message.content))}</div>
+            `;
+            visitProfileBtn.style.display = 'none';
+        } else {
+            if (message.rankData) {
+                authorStyle = message.rankData.rankStyle;
+                if (message.usernameColor) {
+                    displayName = `<span style="color: ${message.usernameColor}">${displayName}</span> ${message.rankData.suffix}`;
+                } else {
+                    displayName = `${displayName} ${message.rankData.suffix}`;
+                }
+            } else {
+                authorStyle = 'color: #2A9FD6';
+                if (message.usernameColor) {
+                    displayName = `<span style="color: ${message.usernameColor}">${displayName}</span>`;
+                }
+            }
+
+            messageInfo.innerHTML = `
+                <div style="margin-bottom: 10px; display: flex; align-items: center; gap: 5px;">
+                    <span class="chat-timestamp">${message.createdAt}</span>
+                    <span class="author" style="${authorStyle}; margin: 0;">${displayName}:</span>
+                </div>
+                <div class="content" style="color: #fff; word-break: break-word; margin: 0;">${linkifyText(escapeHtml(message.content))}</div>
+            `;
+            visitProfileBtn.style.display = 'block';
+            visitProfileBtn.textContent = 'View Profile';
+        }
+
+        modal.classList.add('show');
+        selectedMessage = message;
+
+        if (window.isStaff || 
+            (message.userID && message.userID === window.authenticatedUserID) ||
+            (message.browserID && message.browserID === window.sessionBrowserID)) {
+            deleteMessageBtn.style.display = 'block';
+        } else {
+            deleteMessageBtn.style.display = 'none';
+        }
+
+        copyMessageIdBtn.style.display = 'block';
+        copyMessageIdBtn.dataset.messageId = message.messageID;
+    }
+
+    function chatBanUser() {
+        if (!window.isStaff || !selectedMessage) return;
+        
+        const params = new URLSearchParams();
+        if (selectedMessage.userID !== null) {
+            params.append('userID', selectedMessage.userID);
+        }
+        if (selectedMessage.browserID !== null) {
+            params.append('browserID', selectedMessage.browserID);
+        }
+
+        fetch(`/api/chatBan?${params.toString()}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('chatMessageModal').classList.remove('show');
+                }
+            })
+            .catch(error => console.error('Error:', error));
+    }
+
+    function closeMessageModal(event) {
+        const modal = document.getElementById('chatMessageModal');
+        const modalContent = modal.querySelector('.chat-msg-modal-content');
+        if (!modalContent.contains(event.target)) {
+            modal.classList.remove('show');
+            selectedMessage = null;
+        }
+    }
+
+    function visitProfile() {
+        if (selectedMessage && selectedMessage.userID !== null) {
+            window.location.href = `/user/${selectedMessage.displayName}`;
+        }
+        document.getElementById('chatMessageModal').classList.remove('show');
+        selectedMessage = null;
+    }
+
+    function copyMessageId(messageId) {
+        navigator.clipboard.writeText(messageId);
+        const copyBtn = document.getElementById('chatCopyMessageIdBtn');
+        const originalText = copyBtn.textContent;
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => copyBtn.textContent = originalText, 1000);
+    }
+
+    window.onclick = function(event) {
+        const modal = document.getElementById('chatMessageModal');
+        if (event.target == modal) {
+            closeMessageModal(event);
+        }
+    }
+
+    document.getElementById('chatTitle').addEventListener('click', async function() {
+        if (!window.isStaff) {
+            return;
+        }
+
+        const response = await fetch('/api/manageChat');
+        const data = await response.json();
+        
+        if (data.success) {
+            document.getElementById('chatEnabledToggle').checked = data.settings.chatEnabled;
+            document.getElementById('allowAnonymousToggle').checked = data.settings.allowAnonymousChat;
+            document.getElementById('showChatToggle').checked = !data.settings.chatHidden;
+            
+            document.getElementById('chatSettingsModal').classList.add('show');
+        }
+    });
+
+    document.getElementById('chatEnabledToggle').addEventListener('change', async function() {
+        const response = await fetch(`/api/manageChat?chatEnabled=${this.checked}`);
+        const data = await response.json();
+        if (!data.success) {
+            this.checked = !this.checked;
+        }
+    });
+
+    document.getElementById('allowAnonymousToggle').addEventListener('change', async function() {
+        const response = await fetch(`/api/manageChat?allowAnonymousChat=${this.checked}`);
+        const data = await response.json();
+        if (!data.success) {
+            this.checked = !this.checked;
+        }
+    });
+
+    document.getElementById('showChatToggle').addEventListener('change', async function() {
+        const response = await fetch(`/api/manageChat?chatHidden=${!this.checked}`);
+        const data = await response.json();
+        if (!data.success) {
+            this.checked = !this.checked;
+        }
+    });
+
+    document.getElementById('chatSettingsModal').addEventListener('click', function(event) {
+        if (event.target === this) {
+            this.classList.remove('show');
+        }
+    });
+</script>
+
+
+
+    <style>
+        .paste-container {
+            display: flex;
+            flex: 1;
+        }
+        .content-area {
+            flex: 1;
+            background: #0C0C0C;
+            position: relative;
+            padding-bottom: 10px;
+			min-height: fit-content;
+        }
+        .content-area pre {
+            width: 100%;
+            height 100%;
+            background: transparent;
+            border: none;
+            color: #fff;
+            font-family: monospace;
+            font-size: 13px;
+            padding: 10px 20px;
+            margin: 0;
+            margin-top: 10px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            tab-size: 4;
+            -moz-tab-size: 4;
+            overflow-y: auto;
+            box-sizing: border-box;
+        }
+        @media screen and (max-width: 768px) {
+            .content-area pre {
+                padding: 10px;
+                font-size: 12px;
+            }
+        }
+        .content-area pre a {
+            color: inherit;
+            text-decoration: none;
+        }
+        .content-area pre a:hover {
+            text-decoration: underline;
+        }
+        .sidebar {
+            width: 280px;
+            background: #181818;
+            padding: 10px 12px;
+            position: fixed;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            transition: transform 0.3s ease;
+            text-align: center;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+        .sidebar.hidden {
+            transform: translateX(100%);
+        }
+        .toggle-sidebar {
+            position: fixed;
+            right: 304px;
+            top: 0;
+            background: #181818;
+            border: none;
+            color: #fff;
+            cursor: pointer;
+            font-size: 18px;
+            z-index: 1000;
+            padding: 6px 10px;
+            border-radius: 0;
+            transition: right 0.3s ease;
+        }
+        .toggle-sidebar:hover {
+            background: #222;
+        }
+        .sidebar.hidden ~ .toggle-sidebar {
+            right: 24px;
+        }
+        a {
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .ascii-art {
+            color: #fff;
+            font-family: monospace;
+            white-space: pre;
+            font-size: 14px;
+            line-height: 1.2;
+            margin-bottom: 10px;
+            margin-top: 0;
+            text-align: center;
+        }
+        .form-group {
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .form-group label {
+            display: block;
+            color: #fff;
+            margin-bottom: 5px;
+            font-size: 13px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .form-group input[type="text"],
+        .form-group input[type="password"] {
+            width: 256px;
+            background: #545454;
+            border: 1px solid #282828;
+            padding: 8px 12px;
+            color: #fff;
+            font-size: 13px;
+            border-radius: 3px;
+        }
+        .form-group input::placeholder {
+            color: #bfbfbf;
+        }
+        .form-group input[type="text"]:focus,
+        .form-group input[type="password"]:focus {
+            outline: none;
+        }
+        .visibility-options {
+            margin: 15px 0;
+            color: #fff;
+            text-align: left;
+        }
+        .visibility-options label {
+            display: block;
+            margin-bottom: 8px;
+            color: #fff;
+            font-size: 13px;
+            font-weight: bold;
+        }
+        .visibility-option {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 4px;
+            padding: 0 2px;
+        }
+        .visibility-option label {
+            margin-bottom: 0;
+            font-size: 13px;
+        }
+        input[type="radio"] {
+            margin: 0;
+        }
+        input[type="radio"]:checked {
+            accent-color: #ff0000;
+        }
+        .username-field {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            margin-bottom: 5px;
+        }
+        .username-field span {
+            color: #fff;
+            font-size: 13px;
+        }
+        .username-field a {
+            color: #888;
+            text-decoration: none;
+            font-size: 13px;
+        }
+        .username-field a:hover {
+            text-decoration: underline;
+        }
+        .info-group {
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .info-group label {
+            display: block;
+            color: #fff;
+            margin-bottom: 5px;
+            font-size: 13px;
+            text-align: left;
+            font-weight: bold;
+        }
+        .info-group .value {
+            color: #bababa;
+            font-size: 13px;
+            text-align: right;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .button {
+            width: 100%;
+            background: #545454;
+            border: 1px solid #282828;
+            color: #fff;
+            padding: 8px 0;
+            cursor: pointer;
+            font-size: 13px;
+            border-radius: 3px;
+            margin-bottom: 1px;
+            transition: all 0.2s;
+        }
+        .button:hover {
+            background: #666;
+        }
+        .admin-button {
+            background: #753B3B !important;
+            border-color: #4D2727 !important;
+        }
+        .admin-button:hover {
+            background: #4D2727 !important;
+        }
+        .comment-input-section {
+            margin-top: 15px;
+            margin-bottom: 15px;
+        }
+        .comment-input {
+            width: 100%;
+            background: #545454;
+            border: 1px solid #282828;
+            color: #fff;
+            padding: 8px 0;
+            font-size: 13px;
+            border-radius: 3px;
+            margin-bottom: 10px;
+            resize: vertical;
+            min-height: 60px;
+            font-family: inherit;
+            box-sizing: border-box;
+            padding-left: 8px;
+            padding-right: 8px;
+        }
+        .comment-input::placeholder {
+            color: #ccc;
+        }
+        .comment-input:focus {
+            outline: none;
+            border-color: #666;
+        }
+        .tos-note {
+            color: #fff;
+            font-size: 13px;
+            margin-top: 15px;
+            text-align: center;
+        }
+        .tos-note a {
+            color: #888;
+            text-decoration: none;
+        }
+        .tos-note a:hover {
+            text-decoration: underline;
+        }
+        .separator {
+            border-top: 2px solid #747474;
+            margin: 15px 0;
+        }
+        *:focus {
+            outline: none !important;
+        }
+        .cf-turnstile {
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: center;
+        }
+        .sidebar a {
+            color: #888;
+            text-decoration: none;
+        }
+        .sidebar a:hover {
+            text-decoration: underline;
+        }
+        .error-message {
+            color: #ff0000;
+            margin: 10px 0;
+            font-size: 13px;
+            text-align: center;
+        }
+        .comments-section {
+            text-align: left;
+            margin-top: 15px;
+        }
+        .comment {
+            margin-bottom: 10px;
+            text-align: left;
+            color: #fff;
+            font-size: 13px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #808080;
+        }
+        .comment-meta {
+            color: #888;
+            margin-bottom: 3px;
+            font-size: 13px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .hide-show-link {
+            color: #ff0000 !important;
+            cursor: pointer;
+            text-decoration: none;
+            margin-left: auto;
+        }
+        .hide-show-link:hover {
+            text-decoration: underline;
+            color: #ff0000 !important;
+        }
+        .comment-meta a {
+            text-decoration: none;
+            color: #fff;
+        }
+        .comment-meta a:hover {
+            text-decoration: underline;
+        }
+        .comment-content {
+            color: #fff;
+            font-size: 13px;
+            overflow-wrap: break-word;
+            word-break: break-all;
+            -webkit-hyphens: auto;
+            -ms-hyphens: auto;
+            hyphens: auto;
+        }
+        .reaction-buttons {
+            display: flex;
+            gap: 10px;
+            margin: 5px 0;
+            justify-content: flex-start;
+        }
+        .reaction-button {
+            background: none;
+            border: none;
+            color: #fff;
+            cursor: pointer;
+            font-size: 13px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .reaction-button:hover {
+            color: #ccc;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+        .modal[style*="display: block"],
+        .modal[style*="display: flex"] {
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background-color: #111;
+            padding: 20px;
+            border: 1px solid #333;
+            position: relative;
+            color: #fff;
+        }
+        .modal-close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 20px;
+        }
+        .modal-close:hover {
+            color: #fff;
+        }
+        select, textarea {
+            width: 100%;
+            background: #282828;
+            border: 0;
+            border-radius: 2px;
+            color: white;
+            padding: 7px 5px;
+            margin-bottom: 10px;
+            font-size: inherit;
+            font-family: inherit;
+            outline: none;
+            box-sizing: border-box;
+        }
+        textarea {
+            height: 60px;
+            resize: none;
+        }
+        button {
+            background: #222;
+            color: #fff;
+            border: 1px solid #333;
+            padding: 8px 16px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: inherit;
+            font-family: inherit;
+        }
+        button:hover {
+            background: #282828;
+            border-color: #444;
+        }
+        .checkbox-container {
+            margin-bottom: 15px;
+        }
+        .checkbox-container input[type="checkbox"] {
+            margin-right: 5px;
+        }
+        .checkbox-container label {
+            color: #fff;
+            font-size: inherit;
+        }
+        .settings-icon {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: #fff;
+            font-size: 14px;
+            cursor: pointer;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+        .settings-icon:hover {
+            opacity: 1;
+        }
+        .sidebar-content {
+            display: block;
+        }
+        .sidebar-content.hidden {
+            display: none;
+        }
+        .settings-content {
+            display: none;
+        }
+        .settings-content.visible {
+            display: block;
+        }
+        .info-row .visibility-icon {
+            font-size: 12px;
+            opacity: 0.7;
+            margin-right: 5px;
+        }
+    </style>
+
+    <div class="paste-container">
+        <div class="content-area">
+            <pre>                                            ⣴⠀ ⣀⣤⣴⣶⣾⣿⣿⣿⣿⣿⣿⣷⣶⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀                                          ⢾⣷⣿⣿⣿⣿⣿⠿⠟⠛⠉⠉⠉⠉⠉⠙⠳⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀                                          ⠘⢿⡏⠛⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⡀⠀⠀⠀⠀⠀⠀⠀By Scofield (Anonyme) 
+⠀⠀                                          ⠀⠸⣇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⡴⠒⠒⠒⠒⢢⣤⠀⣿⣿⣿⣷⣄⠀⠀⠀⠀⠀
+⠀⠀                                          ⠀⠀⢿⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠉⠉⠉⠉⠀⠀⣿⣿⣿⣿⣿⣷⠀⠀⠀⠀
+⠀⠀                                          ⠀⠀⠘⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⣷⣿⡆⠀⠀
+⠀⠀                                          ⠀⠀⠀⢻⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢰⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀
+⠀⠀                                          ⠀⠀⠀⠘⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣤⣤⣤⣄⣠⣿⣿⣿⣿⣿⣿⣿⣿⠀⠀⠀
+⠀⠀                                          ⠀⠀⠀⠀⣿⣶⡄⠀⠀⠀⠀⠀⠀⠀⢀⣴⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⠀⠀
+⠀⠀                                          ⠀⠀⠀⠀⠻⣿⣿⣄⠀⠀⠀⠀⣤⣶⣿⣿⣿⣿⣿⣿⣿⣿⢿⣿⣿⣿⣿⣿⣿⣿⠀⠀⠀
+⠀⠀                                          ⠀⠀⠀⠀⠀⢹⡌⢻⣿⣦⣄⠀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡼⣿⣿⣿⣿⣿⣿⣿⠀⠀⠀
+⠀⠀⠀⠀                                          ⠀⠀⠀⠘⣧⠀⠙⢿⣿⣿⣿⣿⣿⣿⣿⣿⡟⠁⢹⣿⡇⢿⣿⣿⣿⣿⣿⣿⠀⠀⠀
+⠀⠀ ⠀⠀                                          ⠀⠀⠀⠀⢹⣄⣀⣀⠈⠛⢻⣿⣿⣿⣿⡏⠀⠀⠀⣿⣿⠀⣿⣿⣿⣿⣿⣿⡇⠀⠀
+⠀⠀⠀⠀                                          ⠀⠀⠀⠀⠈⣯⠉⠀⠀⠀⢸⣿⣿⣿⣿⣆⠀⠀⠀⢿⣿⡇⠸⣿⣿⣿⣿⣿⣿⠀⠀
+⠀⠀⠀                                          ⠀⠀⠀⠀⠀⠀⢹⡆⠀⠀⠀⢸⣿⣿⣿⣿⣿⣧⠀⠀⠘⣿⡇⠀⢹⣿⣿⣿⣿⣿⠀⠀
+⠀⠀⠀⠀                                          ⠀⠀⠀⠀⠀⠈⣷⠀⠀⠀⢸⣿⣿⣿⣿⣿⣿⡇⠀⠀⢹⣧⡀⠀⣿⣿⣿⣿⡿⠀⠀
+⠀⠀                                          ⠀⠀⠀⠀⠀⠀⠀⠀⢹⡆⠀⠀⢸⣿⣿⣿⣿⣿⣿⣧⠀⠀⣿⣿⣷⣄⢹⣿⣿⣿⡇⠀⠀
+⠀⠀⠀⠀                                          ⠀⠀⠀⠀⠀⠀⣷⠀⠀⢸⣿⣿⣿⣿⣿⣿⣿⡄⠀⢿⣿⢿⡻⢝⣿⣿⣿⠀⠀⠀
+⠀⠀⠀                                          ⠀⠀⠀⠀⠀⠀⠀⠀⢹⡆⠀⢸⣿⣿⣿⣿⣿⣿⣿⣷⠀⠐⠈⠁⠁⠀⣿⣿⣿⠀⠀⠀
+⠀⠀⠀                                          ⠀⠀⠀⠀⠀⠀⠀⠀⠀⣷⠀⠈⣿⣿⣿⣿⣿⣿⣿⣿⣧⠀⠀⠀⠀⠀⢸⣿⡟⠀⠀⠀
+⠀⠀⠀                                          ⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⡇⠀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣧⠀⠀⠀⠀⠘⣿⠃⠀⠀⠀
+⠀⠀                                          ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⠀⢻⣿⣿⣿⣿⣿⣿⣿⣿⣿⡆⠀⠀⠀⠀⠏⠀⠀⠀⠀
+⠀⠀                                          ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⡇⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀                                          ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢿⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣆⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀                                          ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣆⠀⠀⠀⠀⠀⠀⠀
+⠀⠀                                          ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⡀⠀⠀⠀⠀⠀
+⠀⠀                                          ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢰⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⡀⠀⠀⠀
+⠀⠀                                          ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⡀⠀
+⠀⠀                                          ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠿⠟⠛⠛⠿⠿⠿⠿⠿⣿⣿⣿⣿⠿⠿⠿⢿⠿⠟⠛⠛⠃⠀
+
+
+                 ╔═══════════════════════════════════════════════════════════════════════════════╗
+                 ║                                         [Table Of Contents]                   ║
+                 ║                                                                               ║
+                 ╚═══════════════════════════════════════════════════════════════════════════════╝
+
+
+                                                            --&gt;  Table Of Contents... 
+                                                            --&gt;  Credits...
+                                                            --&gt;  Personal Info... 
+                                                            --&gt;  Photo...
+                                                            --&gt;  Social Media...
+                                                            --&gt;  End...
+
+
+                 ╔═══════════════════════════════════════════════════════════════════════════════╗
+                 ║                                              [Credits]                        ║
+                 ║                                                                               ║
+                 ╚═══════════════════════════════════════════════════════════════════════════════╝
+
+                                  A dox from scofield (agent004), member of the French Hackers Squad.
+                                  Contact me on telegram (@debug004) for a dox/swat request or other.
+                                     
+                 ╔═══════════════════════════════════════════════════════════════════════════════╗
+                 ║                                           [Personal Info]                     ║
+                 ║                                                                               ║
+                 ╚═══════════════════════════════════════════════════════════════════════════════╝
+
+&gt; Nom: Tomas 
+&gt; Prénom : Paloma
+&gt; Âge : 14 ans
+&gt; Date de naissance : 02 mars 2011
+&gt; Tete : <a href="https://github.com/viernoi86/image/blob/main/paloma.png?raw=true" </a>
+&gt; 
+&gt; Numéro :
+&gt;  +33 7 67 69 32 82
+&gt;  
+&gt; 
+&gt; 
+&gt; Adresse personnel : 3 Rue Charles de Gaulle, 86240 Smarves
+&gt; 
+&gt; Adresse e-mail :
+&gt; palomatomas941@gmail.com
+&gt; 
+&gt; 
+&gt; Travail : Aucun
+&gt; 	
+&gt;  Établissement scolaire : Ensemble Scolaire Saint Jacques de Compostelle
+&gt; Adress : 2 Av. de la Révolution, 86000 Poitiers			
+&gt;				
+&gt; Étude : collège général 			
+
+
+                 ╔═══════════════════════════════════════════════════════════════════════════════╗
+                 ║                                              [Photo]                          ║
+                 ║                                                                               ║
+                 ╚═══════════════════════════════════════════════════════════════════════════════╝
+
+
+
+                 ╔═══════════════════════════════════════════════════════════════════════════════╗
+                 ║                                           [Social Media]                      ║
+                 ║                                                                               ║
+                 ╚═══════════════════════════════════════════════════════════════════════════════╝
+
+&gt; Insta : <a></a> "https://www.instagram.com/palomba.02/" 
+&gt;  
+&gt; 
+&gt; Snap : <a> "https://www.snapchat.com/add/palomba02" 
+&gt; 
+&gt; 
+                 ╔═══════════════════════════════════════════════════════════════════════════════╗
+                 ║                                               [End]                           ║
+                 ║                                                                               ║
+                 ╚═══════════════════════════════════════════════════════════════════════════════╝
+
+
+⠀⠀⠀⠀⠀⠀⠀⠀
+               -=====-      
+               _..._                           
+              .~     `~.                    
+      ,_     /          }                   
+     ,_\'--, \   _.'`~~/                  
+      \'--,_`{_,}    -(       Take care of yourself, love your neighbour.       
+       '.`-.`\;--,___.'_      Jesus is the way of truth.         
+         '._`/    |_ _{@}                 
+            /     ` |-';/     - Scofield
+           /   \    /  |       
+          /     '--;_      
+         _\          `\    
+        / |`-.___.    /    
+        `--`------'`--`
+</pre>
+        </div>
+        <button class="toggle-sidebar">☰</button>
+        <div class="sidebar">
+            
+            <a href="/" style="text-decoration: none;">
+                <div class="ascii-art">  ____            _     _       
+ |  _ \  _____  _| |__ (_)_ __  
+ | | | |/ _ \ \/ / '_ \| | '_ \ 
+ | |_| | (_) &gt;  &lt;| |_) | | | | |
+ |____/ \___/_/\_\_.__/|_|_| |_|</div>
+            </a>
+			
+
+            
+            <div class="info-group">
+                <div class="info-row">
+                    <label>Title:</label>
+                    <span class="value">
+                        
+                        
+                        macron emmanuel
+                    </span>
+                </div>
+                <div class="info-row">
+                    <label>Created:</label>
+                    <span class="value">Jun 21, 2025</span>
+                </div>
+                <div class="info-row">
+                    <label>Author:</label>
+                    <span class="value">
+                        
+                            
+                                <a href="/user/Agent004" style="color: #2A9FD6; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">Agent004</a>
+                            
+                        
+						
+                    </span>
+                </div>
+                <div class="info-row">
+                    <label>Views:</label>
+                    <span class="value">306</span>
+                </div>
+                
+                <div class="info-row">
+                    <label>Comments:</label>
+                    <span class="value comment-count">3</span>
+                </div>
+                
+                <div class="reaction-buttons">
+                    <button class="reaction-button"><i class="fas fa-thumbs-up"></i> 1</button>
+                    <button class="reaction-button"><i class="fas fa-thumbs-down"></i> 0</button>
+                </div>
+            </div>
+
+			<div class="separator"></div>
+
+            <div class="sidebar-content">
+                
+
+                <button class="button" onclick="window.location.href='/upload'">New (N)</button>
+                <div style="height: 5px"></div>
+                <button class="button" onclick="window.open('/upload/macronemmanuel/raw', '_blank')">Raw (R)</button>
+                
+
+                <div class="separator"></div>
+
+                
+                <div class="comment-input-section">
+                    <div id="comment-error" style="color: red; margin-bottom: 10px; display: none; font-size: 12px;"></div>
+                    <textarea id="comment-input" class="comment-input" placeholder="Add a comment..."></textarea>
+                    <div class="cf-turnstile" data-sitekey="0x4AAAAAAA7KBtIohquuvBr0" data-theme="dark"><div><input type="hidden" name="cf-turnstile-response" id="cf-chl-widget-29p58_response" value="0.-mZPY3LmXgzwFCz7uuRzU9UUMCdexNf3_3K2UqtSPfy7QiPBEaPihyIdoeNE7-x5-bVCgYIiBUBt-mzWoYG_RLiWJOPNSNI2zh0CoqoXFGUWDEWBiifHuUjv6gVQD0SeUg1NryJo3RuNsAtmOISNO1uEHTG2ixgVjNNdXAZzk7S6qGW4KlG_LoomfTUpqedbFGe2STePKc3EhcTY1WlZWLBjga5OF2U_YEj4cWbrbVnVYQtiKrjStjaBrQm4UJ_mu3EWSMG4I42VmYgQiLD_nn2AHh8NOTSgoXTiKYj7HPHXrTWZxfRrjRhCBP4mZYcOo52mDDiGQnGeTCTPLd-lUtXlVQxeD_0mG8tNJcIrBOI13c9BV6eywdAxeeVCWWFb1_2X_RTBV1pOIWq5IMl2FwpvcVLpmBe620I5EHTF2BEAsR9MNk7NUlMriHQlREK06nNLzmn3r8qTt4n9AGutsoQR7WNDm3tCLbrN3Kgj_L2iJrB3yd_1sxVWF3iavFhlBUrLvaasf7pDBEv2TFpHGTaxjxeRsvJQiGmnBtxlVL56E8EX1ojLY6g9chaSUC9BLHnkfDHcdzf5lSKIvwUCJ8CqVgc_CSDj1QzXLzcgi4jHL9deJ9_R8Q-_QVkDW51IbMLzd44Q4uoIKr8Aq0f4-f3i3soHXdhPENyKLprFQr_YY4k7xmjYV1rWEEw-zse7VPrBvy4qxGEtf7EaVmtieNZglpedD0Naaj1LcEhVSoVf-B7pjT0Y6iMyEFrNe06XbSYJFU0f9A3tlWtJJF7joKR5zTymHCE2J9mLToAWQI3znPqE75PIT1hy0GwdzgsSfGeyhe6hF2bBtRUz8nG7ptXOkdSsIWyrRVdxsvkxarLqzBvixnaIo1Ir9tytwnz3.EzBpZWSBsVGcr4Xd9VBCXA.4e6721ebbbf919a67367638ce756d83abdd20e5208dd8b9ce661638818eee791"></div></div>
+                    <button id="submit-comment" class="button">Submit Comment</button>
+                </div>
+
+                <div class="separator"></div>
+
+                <div class="comments-section">
+                    <div id="comments-container">
+                        
+                        <div class="comment" data-comment-id="726810">
+                            <div class="comment-meta">
+                                <span>
+                                    
+                                        <span style="color: #fff">Anonymous</span>
+                                    
+                                    - <span id="comment-1" class="comment-date">Jul 29, 2025</span>
+                                </span>
+                                
+                            </div>
+                            <div class="comment-content">Yas</div>
+                        </div>
+                        
+                        <div class="comment" data-comment-id="726808">
+                            <div class="comment-meta">
+                                <span>
+                                    
+                                        <span style="color: #fff">Anonymous</span>
+                                    
+                                    - <span id="comment-2" class="comment-date">Jul 29, 2025</span>
+                                </span>
+                                
+                            </div>
+                            <div class="comment-content">.</div>
+                        </div>
+                        
+                        <div class="comment" data-comment-id="726806">
+                            <div class="comment-meta">
+                                <span>
+                                    
+                                        <span style="color: #fff">Anonymous</span>
+                                    
+                                    - <span id="comment-3" class="comment-date">Jul 29, 2025</span>
+                                </span>
+                                
+                            </div>
+                            <div class="comment-content">.</div>
+                        </div>
+                        
+                    </div>
+                </div>
+                
+            </div>
+
+			<div class="tos-note">
+				Please note that all posted information is publicly available and must follow our <a href="/tos">TOS</a>.
+			</div>
+			<div class="separator"></div>
+
+
+            
+        </div>
+    </div>
+
+    <div id="hideModal" class="modal">
+        <div class="modal-content" style="width: 500px;">
+            <span class="modal-close" onclick="closeHideModal()">×</span>
+            <h2 style="margin-top: 0; margin-bottom: 20px; color: #fff;">Seal Paste</h2>
+            <div id="hideModalError" style="color: #ff0000; margin-bottom: 10px; display: none;"></div>
+            <div>
+                <select id="hide-dropdown" style="width: 100%; box-sizing: border-box;" onchange="updateReasonInput()">
+                    <option value="" selected=""></option>
+                    <option value="Insufficient info - Read TOS">Insufficient</option>
+                    <option value="Contains info on a minor under 15 - Read TOS">Underage</option>
+                    <option value="Spam - Read TOS">Spam / Irrelevant</option>
+                    <option value="Threats - Read TOS">Threats</option>
+                    <option value="Contains explicit imagery of a minor. Do not reupload.">CP</option>
+                    <option value="Contains a lack of information. Please provide more information.">Lack of effort</option>
+                </select>
+                <textarea id="hide-reason" placeholder="Reason" style="width: 100%; box-sizing: border-box;"></textarea>
+                <div class="checkbox-container">
+                    <input type="checkbox" id="notifyUser">
+                    <label for="notifyUser">Notify user</label>
+                </div>
+                <button onclick="submitHideForm()">Seal</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="flagModal" class="modal">
+        <div class="modal-content" style="width: 500px;">
+            <span class="modal-close" onclick="closeFlagModal()">×</span>
+            <h2 style="margin-top: 0; margin-bottom: 20px; color: #fff;">Flag Paste</h2>
+            <div id="flagModalError" style="color: #ff0000; margin-bottom: 10px; display: none;"></div>
+            <div>
+                <select id="flag-dropdown" style="width: 100%; box-sizing: border-box;" onchange="updateFlagReason()">
+                    <option value="" selected=""></option>
+                    <option value="Insufficient info - Read TOS">Insufficient</option>
+                    <option value="Contains info on a minor under 15 - Read TOS">Underage</option>
+                    <option value="Spam - Read TOS">Spam / Irrelevant</option>
+                    <option value="Threats - Read TOS">Threats</option>
+                    <option value="Contains explicit imagery of a minor. Do not reupload.">CP</option>
+                    <option value="Contains a lack of information. Please provide more information.">Lack of effort</option>
+                </select>
+                <textarea id="flag-reason" placeholder="Reason (optional)" style="width: 100%; box-sizing: border-box;"></textarea>
+                <button onclick="submitFlagForm()">Flag</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="addStaffMemoModal" class="modal">
+        <div class="modal-content" style="width: 500px;">
+            <span class="modal-close" onclick="closeStaffMemoModal()">×</span>
+            <h2 style="margin-top: 0; margin-bottom: 20px; color: #fff;">Add Staff Note</h2>
+            <div id="staffMemoModalError" style="color: #ff0000; margin-bottom: 10px; display: none;"></div>
+            <div>
+                <select id="memoType" style="width: 100%; box-sizing: border-box;">
+                    <option value="" selected=""></option>
+                    <option value="priority">Priority</option>
+                </select>
+                <textarea id="memoContent" placeholder="Note" style="width: 100%; box-sizing: border-box;"></textarea>
+                <button onclick="submitStaffMemo()">Add Note</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="viewStaffMemosModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); z-index: 1000;">
+        <div style="height: 100%; display: flex; align-items: center; justify-content: center;">
+            <div class="modal-content" style="width: 800px; height: 600px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 10px;">
+                    <h2 style="margin: 0; flex: 1; color: #fff;">Staff Notes</h2>
+                    <button onclick="switchToAddMemo()" style="background: #753B3B; color: #fff; border: 1px solid #333; padding: 4px 12px; border-radius: 3px; cursor: pointer; font-size: inherit; font-family: inherit; position: absolute; left: 50%; transform: translateX(-50%);">New Note</button>
+                    <span class="modal-close" onclick="closeViewStaffMemosModal()" style="color: #aaa; font-size: 28px; font-weight: bold; cursor: pointer; line-height: 20px;">×</span>
+                </div>
+                <div id="memosList" style="height: calc(100% - 70px); overflow-y: auto; padding: 0 10px;">
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function formatDate(timestamp) {
+            const date = new Date(timestamp * 1000);
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const month = months[date.getMonth()];
+            const day = date.getDate();
+            const suffix = ['th', 'st', 'nd', 'rd'][(day % 10 > 3) ? 0 : (day % 100 - day % 10 != 10) * (day % 10)];
+            
+            // For paste creation timestamp (used in the sidebar), only show date
+            if (document.querySelector('.info-group .value')) {
+                return `${month} ${day}${suffix}, ${year}`;
+            }
+            
+            // For other timestamps, include the time
+            const hours = date.getHours().toString().padStart(2, '0');
+            const minutes = date.getMinutes().toString().padStart(2, '0');
+            return `${month} ${day}${suffix}, ${year} ${hours}:${minutes}`;
+        }
+
+        function togglePin() {
+            const pasteID = '670372';
+            const action = 'public' === 'pinned' ? '0' : '1';
+            fetch(`/api/pinPaste?pasteID=${pasteID}&action=${action}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        window.location.reload();
+                    }
+                });
+        }
+
+        function toggleComments() {
+            const pasteID = '670372';
+            const action = '1' === '1' ? '0' : '1';
+            fetch(`/api/disablePasteFeature?pasteID=${pasteID}&action=${action}&disable=comments`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        window.location.reload();
+                    }
+                });
+        }
+
+        function toggleEdits() {
+            const pasteID = '670372';
+            const action = '1' === '1' ? '0' : '1';
+            fetch(`/api/disablePasteFeature?pasteID=${pasteID}&action=${action}&disable=edits`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        window.location.reload();
+                    }
+                });
+        }
+
+        function formatCommentDate(timestamp) {
+            return timestamp;
+        }
+
+        document.querySelectorAll('.comment-date').forEach(el => {
+            const timestamp = el.textContent.trim();
+            if (/^\d+$/.test(timestamp)) {
+                el.textContent = timestamp;
+            }
+        });
+
+        const createdElement = document.querySelector('.info-row:nth-child(2) .value');
+        if (createdElement) {
+            const timestamp = parseInt(createdElement.dataset.timestamp);
+            if (!isNaN(timestamp)) {
+                createdElement.textContent = timestamp;
+            }
+        }
+
+        function makeLinksClickable() {
+            const pre = document.querySelector('.content-area pre');
+            if (!pre) return;
+
+            const content = pre.innerHTML;
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            pre.innerHTML = content.replace(urlRegex, url => `<a href="${sanitize(url)}" target="_blank">${url}</a>`);
+        }
+
+        document.addEventListener('DOMContentLoaded', makeLinksClickable);
+
+        const submitButton = document.getElementById('submit-comment');
+        if (submitButton) {
+            submitButton.addEventListener('click', async function() {
+                const commentInput = document.getElementById('comment-input');
+                const errorDiv = document.getElementById('comment-error');
+                const content = commentInput.value.trim();
+                const pasteID = '670372';
+
+                if (!content) {
+                    errorDiv.textContent = 'Please enter a comment';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+
+                try {
+                    const turnstileToken = document.querySelector('[name="cf-turnstile-response"]').value;
+                    const response = await fetch(`/api/addComment?pasteID=${pasteID}&content=${encodeURIComponent(content)}&cf-turnstile-response=${turnstileToken}`, { method: 'POST' });
+                    const data = await response.json();
+
+                    if (data.success) {
+                        commentInput.value = '';
+                        errorDiv.style.display = 'none';
+
+                        // Update comment count in the sidebar
+                        const commentCountElement = document.querySelector('.comment-count');
+                        if (commentCountElement) {
+                            const currentCount = parseInt(commentCountElement.textContent) || 0;
+                            commentCountElement.textContent = currentCount + 1;
+                        }
+
+                        const commentsContainer = document.getElementById('comments-container');
+                        const newComment = document.createElement('div');
+                        newComment.className = 'comment';
+                        newComment.setAttribute('data-comment-id', data.comment.commentID);
+                        newComment.innerHTML = `
+                            <div class="comment-meta">
+                                <span>
+                                    ${data.comment.username ? 
+                                        data.comment.rankStyle ? 
+                                            `<span style="${data.comment.rankStyle}">
+                                                ${data.comment.usernameColor ? 
+                                                    `<span style="color: ${data.comment.usernameColor}"><a href="/user/${data.comment.username}" style="color: inherit;">${data.comment.username}</a></span>` 
+                                                    : `<a href="/user/${data.comment.username}" style="color: inherit;">${data.comment.username}</a>`}
+                                                ${data.comment.suffix ? ` ${data.comment.suffix}` : ''}
+                                            </span>`
+                                            : `<span style="color: #fff"><a href="/user/${data.comment.username}" style="color: inherit;">${data.comment.username}</a>${data.comment.suffix ? ` ${data.comment.suffix}` : ''}</span>`
+                                        : '<span style="color: #fff">Anonymous</span>'} - 
+                                    <span class="comment-date">${formatCommentDate(data.comment.createdAt)}</span>
+                                </span>
+                                
+                            </div>
+                            <div class="comment-content">${data.comment.content}</div>
+                        `;
+
+                        // Add the new comment at the top of the comments container
+                        if (commentsContainer.firstChild) {
+                            commentsContainer.insertBefore(newComment, commentsContainer.firstChild);
+                        } else {
+                            commentsContainer.appendChild(newComment);
+                        }
+
+                        // Set up hide/show links for the new comment
+                        setupHideShowLinks();
+
+                        // Reset turnstile
+                        turnstile.reset();
+                    } else {
+                        errorDiv.textContent = data.error || 'Failed to add comment';
+                        errorDiv.style.display = 'block';
+                        turnstile.reset();
+                    }
+                } catch (error) {
+                    if (!data?.success) {
+                        errorDiv.textContent = 'Failed to add comment';
+                        errorDiv.style.display = 'block';
+                        turnstile.reset();
+                    }
+                }
+            });
+        }
+
+        const toggleButton = document.querySelector('.toggle-sidebar');
+        const sidebar = document.querySelector('.sidebar');
+        
+        toggleButton.addEventListener('click', function() {
+            sidebar.classList.toggle('hidden');
+            if (sidebar.classList.contains('hidden')) {
+                toggleButton.style.right = '0';
+            } else {
+                toggleButton.style.right = '304px';
+            }
+        });
+
+        let currentPasteId = '670372';
+        let isSealed = false;
+        const pasteType = 'public';
+        
+        function showHideModal() {
+            document.getElementById('hideModal').style.display = 'block';
+            document.getElementById('hideModalError').style.display = 'none';
+            document.getElementById('hide-dropdown').value = '';
+            document.getElementById('hide-reason').value = '';
+            document.getElementById('notifyUser').checked = false;
+        }
+
+        function closeHideModal() {
+            document.getElementById('hideModal').style.display = 'none';
+        }
+
+        function updateReasonInput() {
+            const dropdown = document.getElementById('hide-dropdown');
+            const reason = document.getElementById('hide-reason');
+            reason.value = dropdown.value;
+        }
+
+        function updateButton(sealed) {
+            const sealButton = document.querySelector('button.seal-button');
+            if (!sealButton) return;
+            
+            sealButton.textContent = sealed ? 'Unseal' : 'Seal';
+            const newButton = sealButton.cloneNode(true);
+            sealButton.parentNode.replaceChild(newButton, sealButton);
+            
+            newButton.onclick = function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (sealed) {
+                    unsealPaste();
+                } else {
+                    showHideModal();
+                }
+            };
+            isSealed = sealed;
+        }
+
+        async function submitHideForm() {
+            if (isSealed) return;
+            
+            const reason = document.getElementById('hide-reason').value.trim();
+            const notify = document.getElementById('notifyUser').checked;
+            const errorDiv = document.getElementById('hideModalError');
+            
+            let url = `/api/managePasteType?action=seal&pasteID=${currentPasteId}`;
+            if (reason) {
+                url += `&reason=${encodeURIComponent(reason)}`;
+            }
+            url += `&notify=${notify}`;
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.success) {
+                    closeHideModal();
+                    updateButton(true);
+					window.location.reload();
+                } else {
+                    errorDiv.textContent = data.error || 'Failed to seal paste';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'An error occurred';
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        async function unsealPaste() {
+            if (!isSealed) return;
+            
+            try {
+                const response = await fetch(`/api/managePasteType?action=unseal&pasteID=${currentPasteId}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    updateButton(false);
+					window.location.reload();
+                }
+            } catch (error) {
+                console.error('Failed to unseal paste:', error);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            updateButton(isSealed);
+        });
+
+        function showFlagModal() {
+            document.getElementById('flagModal').style.display = 'block';
+            document.getElementById('flag-dropdown').value = '';
+            document.getElementById('flag-reason').value = '';
+            document.getElementById('flagModalError').style.display = 'none';
+        }
+
+        function closeFlagModal() {
+            document.getElementById('flagModal').style.display = 'none';
+        }
+
+        function updateFlagReason() {
+            const dropdown = document.getElementById('flag-dropdown');
+            const reasonInput = document.getElementById('flag-reason');
+            reasonInput.value = dropdown.value;
+        }
+
+        function submitFlagForm() {
+            const reason = document.getElementById('flag-reason').value.trim();
+            let url = `/api/flagPaste?pasteID=670372`;
+            
+            if (reason) {
+                url += `&reason=${encodeURIComponent(reason)}`;
+            }
+
+            fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+					window.location.reload();
+                } else {
+                    const errorDiv = document.getElementById('flagModalError');
+                    errorDiv.textContent = data.error || 'Failed to flag paste';
+                    errorDiv.style.display = 'block';
+                }
+            })
+            .catch(error => {
+                const errorDiv = document.getElementById('flagModalError');
+                errorDiv.textContent = 'An error occurred while flagging the paste';
+                errorDiv.style.display = 'block';
+            });
+        }
+
+        function setupHideShowLinks() {
+            document.querySelectorAll('.hide-show-link').forEach(link => {
+                if (!link.hasAttribute('data-initialized')) {
+                    link.setAttribute('data-initialized', 'true');
+                    link.addEventListener('click', async function() {
+                        const currentText = this.textContent;
+                        const action = currentText === 'Hide' ? '1' : '0';
+                        const commentElement = this.closest('.comment');
+                        const commentID = commentElement.getAttribute('data-comment-id');
+
+                        try {
+                            const response = await fetch(`/api/hideComment?commentID=${commentID}&action=${action}`);
+                            const data = await response.json();
+
+                            if (data.success) {
+                                this.textContent = action === '1' ? 'Show' : 'Hide';
+                            }
+                        } catch (error) {
+                            console.error('Error toggling comment visibility:', error);
+                        }
+                    });
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            setupHideShowLinks();
+
+            const thumbsUp = document.querySelector('.reaction-button:first-child');
+            const thumbsDown = document.querySelector('.reaction-button:last-child');
+            
+            thumbsUp.addEventListener('click', () => addReaction(1));
+            thumbsDown.addEventListener('click', () => addReaction(0));
+        });
+
+        async function addReaction(reactionType) {
+            try {
+                const response = await fetch(`/api/addReaction?pasteID=670372&reactionType=${reactionType}`);
+                const data = await response.json();
+                
+                if (data.error === 'UNAUTHENTICATED') {
+                    window.location.href = '/login';
+                    return;
+                }
+
+                if (data.success) {
+                    const thumbsUp = document.querySelector('.reaction-button:first-child');
+                    const thumbsDown = document.querySelector('.reaction-button:last-child');
+                    thumbsUp.innerHTML = `<i class="fas fa-thumbs-up"></i> ${data.likes}`;
+                    thumbsDown.innerHTML = `<i class="fas fa-thumbs-down"></i> ${data.dislikes}`;
+                }
+            } catch (error) {
+                console.error('Error adding reaction:', error);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            setupHideShowLinks();
+
+            const thumbsUp = document.querySelector('.reaction-button:first-child');
+            const thumbsDown = document.querySelector('.reaction-button:last-child');
+
+            const settingsIcon = document.querySelector('.settings-icon');
+            const sidebarContent = document.querySelector('.sidebar-content');
+            const settingsContent = document.querySelector('.settings-content');
+            
+            if (settingsIcon) {
+                settingsIcon.addEventListener('click', function() {
+                    if (sidebarContent.classList.contains('hidden')) {
+                        sidebarContent.classList.remove('hidden');
+                        settingsContent.classList.remove('visible');
+                    } else {
+                        sidebarContent.classList.add('hidden');
+                        settingsContent.classList.add('visible');
+                    }
+                });
+            }
+
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.addedNodes.length) {
+                        mutation.addedNodes.forEach(function(node) {
+                            if (node.nodeType === 1) {
+                                const commentDates = node.querySelectorAll('.comment-date');
+                                commentDates.forEach(el => {
+                                    const timestamp = el.textContent.trim();
+                                    if (/^\d+$/.test(timestamp)) {
+                                        el.textContent = timestamp;
+                                    }
+                                });
+                            }
+                        });
+                    }
+                });
+            });
+
+            observer.observe(document.getElementById('comments-container'), { childList: true, subtree: true });
+        });
+
+        let paste_memos = [];
+
+        function deleteMemo(memoId) {
+            fetch(`/api/deletePasteMemo?memoID=${memoId}`, {
+                method: 'GET',
+                credentials: 'same-origin'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Remove from local data
+                    paste_memos = paste_memos.filter(memo => memo.memoID !== memoId);
+                    showViewStaffMemosModal(); // Refresh the current view
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        function showStaffMemoModal() {
+            document.getElementById('addStaffMemoModal').style.display = 'flex';
+            document.getElementById('staffMemoModalError').style.display = 'none';
+            document.getElementById('memoContent').value = '';
+            document.getElementById('memoType').value = '';
+        }
+
+        function closeStaffMemoModal() {
+            document.getElementById('addStaffMemoModal').style.display = 'none';
+        }
+
+        async function submitStaffMemo() {
+            const type = document.getElementById('memoType').value;
+            const value = document.getElementById('memoContent').value.trim();
+            const errorDiv = document.getElementById('staffMemoModalError');
+            
+            if (!value) {
+                errorDiv.textContent = 'Memo cannot be blank!';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            fetch(`/api/addPasteMemo?pasteID=670372&type=${encodeURIComponent(type)}&value=${encodeURIComponent(value)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        closeStaffMemoModal();
+                        window.location.reload();
+                    } else {
+                        errorDiv.textContent = data.error || 'Failed to add memo';
+                        errorDiv.style.display = 'block';
+                    }
+                })
+                .catch(error => {
+                    errorDiv.textContent = 'An error occurred while adding the memo';
+                    errorDiv.style.display = 'block';
+                });
+        }
+
+        function showViewStaffMemosModal() {
+            const memosList = document.getElementById('memosList');
+            memosList.innerHTML = '';
+            
+            const memos = paste_memos;
+            memos.sort((a, b) => {
+                if (a.type === 'priority' && b.type !== 'priority') return -1;
+                if (a.type !== 'priority' && b.type === 'priority') return 1;
+                return b.createdAt - a.createdAt;
+            });
+
+            memos.forEach(memo => {
+                const memoDiv = document.createElement('div');
+                memoDiv.style.cssText = 'background: #282828; border-radius: 2px; padding: 12px; margin-bottom: 10px;';
+                
+                const headerDiv = document.createElement('div');
+                headerDiv.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;';
+                
+                const leftSide = document.createElement('div');
+                leftSide.style.cssText = 'display: flex; align-items: center;';
+                
+                const userLink = document.createElement('a');
+                userLink.href = memo.username ? `/user/${memo.username}` : '/';
+                userLink.style.cssText = 'color: inherit; text-decoration: none;';
+                userLink.onmouseover = () => userLink.style.textDecoration = 'underline';
+                userLink.onmouseout = () => userLink.style.textDecoration = 'none';
+                
+                const username = document.createElement('span');
+                username.style.cssText = memo.rankStyle;
+                
+                if (!memo.username) {
+                    const systemName = document.createElement('span');
+                    systemName.style.cssText = 'color: #ff0000; font-weight: bold;';
+                    systemName.textContent = 'Doxbin';
+                    username.appendChild(systemName);
+                } else {
+                    if (memo.usernameColor) {
+                        const coloredUsername = document.createElement('span');
+                        coloredUsername.style.color = memo.usernameColor;
+                        coloredUsername.textContent = memo.username;
+                        username.appendChild(coloredUsername);
+                    } else {
+                        username.textContent = memo.username;
+                    }
+                    username.appendChild(document.createTextNode(' ' + memo.suffix));
+                }
+                
+                userLink.appendChild(username);
+                leftSide.appendChild(userLink);
+                
+                const timestamp = document.createElement('span');
+                timestamp.style.cssText = 'color: #666; margin-left: 10px;';
+                timestamp.textContent = memo.createdAt;
+
+                leftSide.appendChild(timestamp);
+
+                if (false.rank === 'admin' || false.rank === 'manager') {
+                    const deleteBtn = document.createElement('span');
+                    deleteBtn.style.cssText = 'color: #ff0000; margin-left: 10px; cursor: pointer;';
+                    deleteBtn.textContent = 'Delete';
+                    deleteBtn.onmouseover = () => deleteBtn.style.textDecoration = 'underline';
+                    deleteBtn.onmouseout = () => deleteBtn.style.textDecoration = 'none';
+                    deleteBtn.onclick = () => deleteMemo(memo.memoID);
+                    leftSide.appendChild(deleteBtn);
+                }
+
+                headerDiv.appendChild(leftSide);
+                
+                if (memo.type === 'priority') {
+                    const priority = document.createElement('span');
+                    priority.style.cssText = 'color: #ff0000;';
+                    priority.textContent = '[Priority]';
+                    headerDiv.appendChild(priority);
+                }
+                
+                const content = document.createElement('div');
+                content.style.cssText = 'white-space: pre-wrap; color: #fff; font-size: 13px; line-height: 1.4;';
+                content.textContent = memo.value;
+                
+                memoDiv.appendChild(headerDiv);
+                memoDiv.appendChild(content);
+                memosList.appendChild(memoDiv);
+            });
+            
+            document.getElementById('viewStaffMemosModal').style.display = 'block';
+        }
+
+        function closeViewStaffMemosModal() {
+            document.getElementById('viewStaffMemosModal').style.display = 'none';
+        }
+
+        function switchToAddMemo() {
+            closeViewStaffMemosModal();
+            showStaffMemoModal();
+        }
+
+        function formatDate(timestamp) {
+            const date = new Date(timestamp * 1000);
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const day = date.getDate();
+            const suffix = (day) => {
+                if (day > 3 && day < 21) return 'th';
+                switch (day % 10) {
+                    case 1: return 'st';
+                    case 2: return 'nd';
+                    case 3: return 'rd';
+                    default: return 'th';
+                }
+            };
+            const pad = (n) => n < 10 ? '0' + n : n;
+            return `${months[date.getMonth()]} ${day}${suffix(day)}, ${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+        }
+
+        function savePasteSettings() {
+            const password = document.getElementById('paste-password')?.value || '';
+            const visibility = document.querySelector('input[name="visibility"]:checked')?.value || 'public';
+            const pasteID = '670372';
+
+            const url = `/api/editPasteVisibility?pasteID=${pasteID}&type=${visibility}&password=${encodeURIComponent(password)}`;
+
+            fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.reload();
+                } else {
+                    const errorDiv = document.getElementById('settings-error');
+                    errorDiv.textContent = data.error || 'Failed to update paste settings';
+                    errorDiv.style.display = 'block';
+                }
+            })
+            .catch(error => {
+                const errorDiv = document.getElementById('settings-error');
+                errorDiv.textContent = 'An error occurred while saving settings';
+                errorDiv.style.display = 'block';
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add event listeners here
+        });
+    </script>
+
+</body></html>
